@@ -1,7 +1,7 @@
 {
 	"name": "NewContentLoader",
 	"namespace": "Yoko",
-	"version_number": "0.0.3",
+	"version_number": "0.0.1",
 	"description": "",
 	"website_url": "",
 	"dependencies": [

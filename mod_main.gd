@@ -10,4 +10,5 @@ var ext_dir: String = ""
 func _init():
     dir = ModLoaderMod.get_unpacked_dir().plus_file(MYMODNAME_MOD_DIR)
     ext_dir = dir.plus_file("extensions")
-    ModLoaderMod.install_script_extension(ext_dir.plus_file("item_service.gd"))
+    ModLoaderMod.install_script_extension(ext_dir.plus_file("progress_data.gd"))
+    ModLoaderMod.install_script_extension(ext_dir.plus_file("run_data.gd"))

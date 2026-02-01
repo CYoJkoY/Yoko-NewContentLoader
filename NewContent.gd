@@ -72,7 +72,7 @@ func add_resources() -> void:
     
     if tracked_effects != null:
         var tracked_effects_hashes: Dictionary = Utils.convert_dictionary_to_hash(tracked_effects)
-        RunData.fa_init_tracked_effects.merge(tracked_effects_hashes)
+        RunData.ncl_init_tracked_effects.merge(tracked_effects_hashes)
 
     ItemService.init_unlocked_pool()
 
