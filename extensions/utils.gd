@@ -1,0 +1,78 @@
+extends "res://singletons/utils.gd"
+
+const scales: Array = [
+    {"value": 1000000000000000.0, "suffix": "P"},
+    {"value": 1000000000000.0, "suffix": "T"},
+    {"value": 1000000000.0, "suffix": "B"},
+    {"value": 1000000.0, "suffix": "M"},
+    {"value": 1000.0, "suffix": "K"}
+]
+
+# =========================== Extension =========================== #
+
+# =========================== Custom =========================== #
+
+# =========================== Method =========================== #
+func ncl_delete_projectile(proj: Node2D) -> void:
+        proj.hide()
+        proj.velocity = Vector2.ZERO
+        proj._hitbox.collision_layer = proj._original_collision_layer
+        proj._enable_stop_delay = false
+        proj._elapsed_delay = 0
+        proj._sprite.material = null
+        proj._animation_player.stop()
+        proj.set_physics_process(false)
+
+        disconnect_all_signal_connections(proj, "hit_something")
+        disconnect_all_signal_connections(proj._hitbox, "killed_something")
+
+        if is_instance_valid(proj._hitbox.from) and \
+        proj._hitbox.from.has_signal("died") and \
+        proj._hitbox.from.is_connected("died", proj, "on_entity_died"):
+            proj._hitbox.from.disconnect("died", proj, "on_entity_died")
+        
+        proj.queue_free()
+
+func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
+    var effects: Dictionary = RunData.get_player_effects(player_index)
+    effects[stat_hash] += value
+    RunData._are_player_stats_dirty[player_index] = true
+    Utils.reset_stat_cache(player_index)
+
+func ncl_format_number(number: float) -> String:
+    var is_negative: bool = number < 0
+    var abs_number: float = abs(number)
+    
+    var result: String = str(abs_number)
+    if abs_number >= 1000.0:
+        for scale in scales:
+            if abs_number >= scale.value:
+                result = str(stepify(abs_number / scale.value, 0.01)) + scale.suffix
+                break
+    
+    if is_negative and abs_number != 0.0:
+        result = "-" + result
+    
+    return result
+
+func ncl_curse_effect_value(
+    value: float, modifier: float, options: Dictionary = {}
+) -> float:
+    var step: float = options.get("step", 0.01)
+    var process_negative: bool = options.get("process_negative", true)
+    var is_negative: bool = options.get("is_negative", false)
+    var has_min: bool = options.get("has_min", false)
+    var min_num: float = options.get("min_num", 0.0)
+    var has_max: bool = options.get("has_max", false)
+    var max_num: float = options.get("max_num", 0.0)
+
+    match is_negative or (process_negative and value < 0.0):
+        true:
+            value = stepify(value / (1.0 + modifier), step)
+        false:
+            value = stepify(value * (1.0 + modifier), step)
+
+    if has_min: value = max(value, min_num)
+    if has_max: value = min(value, max_num)
+
+    return value

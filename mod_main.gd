@@ -12,3 +12,4 @@ func _init():
     ext_dir = dir.plus_file("extensions")
     ModLoaderMod.install_script_extension(ext_dir.plus_file("progress_data.gd"))
     ModLoaderMod.install_script_extension(ext_dir.plus_file("run_data.gd"))
+    ModLoaderMod.install_script_extension(ext_dir.plus_file("utils.gd"))
