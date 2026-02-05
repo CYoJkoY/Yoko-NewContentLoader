@@ -14,24 +14,24 @@ const scales: Array = [
 
 # =========================== Method =========================== #
 func ncl_delete_projectile(proj: Node2D) -> void:
-        proj.hide()
-        proj.velocity = Vector2.ZERO
-        proj._hitbox.collision_layer = proj._original_collision_layer
-        proj._enable_stop_delay = false
-        proj._elapsed_delay = 0
-        proj._sprite.material = null
-        proj._animation_player.stop()
-        proj.set_physics_process(false)
+    proj.hide()
+    proj.velocity = Vector2.ZERO
+    proj._hitbox.collision_layer = proj._original_collision_layer
+    proj._enable_stop_delay = false
+    proj._elapsed_delay = 0
+    proj._sprite.material = null
+    proj._animation_player.stop()
+    proj.set_physics_process(false)
 
-        disconnect_all_signal_connections(proj, "hit_something")
-        disconnect_all_signal_connections(proj._hitbox, "killed_something")
+    disconnect_all_signal_connections(proj, "hit_something")
+    disconnect_all_signal_connections(proj._hitbox, "killed_something")
 
-        if is_instance_valid(proj._hitbox.from) and \
-        proj._hitbox.from.has_signal("died") and \
-        proj._hitbox.from.is_connected("died", proj, "on_entity_died"):
-            proj._hitbox.from.disconnect("died", proj, "on_entity_died")
-        
-        proj.queue_free()
+    if is_instance_valid(proj._hitbox.from) and \
+    proj._hitbox.from.has_signal("died") and \
+    proj._hitbox.from.is_connected("died", proj, "on_entity_died"):
+        proj._hitbox.from.disconnect("died", proj, "on_entity_died")
+    
+    proj.queue_free()
 
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
@@ -55,16 +55,12 @@ func ncl_format_number(number: float) -> String:
     
     return result
 
-func ncl_curse_effect_value(
-    value: float, modifier: float, options: Dictionary = {}
-) -> float:
+func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary = {}) -> float:
     var step: float = options.get("step", 0.01)
     var process_negative: bool = options.get("process_negative", true)
     var is_negative: bool = options.get("is_negative", false)
-    var has_min: bool = options.get("has_min", false)
-    var min_num: float = options.get("min_num", 0.0)
-    var has_max: bool = options.get("has_max", false)
-    var max_num: float = options.get("max_num", 0.0)
+    var min_num: float = options.get("min_num", null)
+    var max_num: float = options.get("max_num", null)
 
     match is_negative or (process_negative and value < 0.0):
         true:
@@ -72,7 +68,16 @@ func ncl_curse_effect_value(
         false:
             value = stepify(value * (1.0 + modifier), step)
 
-    if has_min: value = max(value, min_num)
-    if has_max: value = min(value, max_num)
+    if min_num != null: value = max(value, min_num)
+    if max_num != null: value = min(value, max_num)
 
     return value
+
+func ncl_curse(item_data: ItemParentData, player_index: int) -> ItemParentData:
+    var dlc: DLCData = ProgressData.get_dlc_data("abyssal_terrors")
+    return dlc.curse_item(item_data, player_index)
+
+func ncl_create_tracking(key: String, value: float) -> String:
+    var color: String = Utils.SECONDARY_FONT_COLOR_HTML
+    var key_text: String = tr(key)
+    return "[color=%s]%s[/color]" % [color, key_text.format([value])]
