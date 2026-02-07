@@ -59,8 +59,8 @@ func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary =
     var step: float = options.get("step", 0.01)
     var process_negative: bool = options.get("process_negative", true)
     var is_negative: bool = options.get("is_negative", false)
-    var min_num: float = options.get("min_num", null)
-    var max_num: float = options.get("max_num", null)
+    var min_num: float = options.get("min_num", NAN)
+    var max_num: float = options.get("max_num", NAN)
 
     match is_negative or (process_negative and value < 0.0):
         true:
@@ -68,12 +68,12 @@ func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary =
         false:
             value = stepify(value * (1.0 + modifier), step)
 
-    if min_num != null: value = max(value, min_num)
-    if max_num != null: value = min(value, max_num)
+    if !is_nan(min_num): value = max(value, min_num)
+    if !is_nan(max_num): value = min(value, max_num)
 
     return value
 
-func ncl_curse(item_data: ItemParentData, player_index: int) -> ItemParentData:
+func ncl_curse_item(item_data: ItemParentData, player_index: int) -> ItemParentData:
     var dlc: DLCData = ProgressData.get_dlc_data("abyssal_terrors")
     return dlc.curse_item(item_data, player_index)
 
@@ -81,3 +81,13 @@ func ncl_create_tracking(key: String, value: float) -> String:
     var color: String = Utils.SECONDARY_FONT_COLOR_HTML
     var key_text: String = tr(key)
     return "[color=%s]%s[/color]" % [color, key_text.format([value])]
+
+func ncl_curse_enemy(enemy: Enemy) -> void:
+    var curse: float = Utils.sum_all_player_stats(Keys.stat_curse_hash)
+    var main: Node = get_scene_node()
+    var effect_behaviors: Array = main._effect_behaviors.get_children()
+    for effect_behavior in effect_behaviors:
+        if !(effect_behavior is CurseSceneEffectBehavior): continue
+
+        effect_behavior._curse_enemy(enemy, curse)
+        break

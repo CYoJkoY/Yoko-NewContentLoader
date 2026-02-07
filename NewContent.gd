@@ -31,6 +31,11 @@ export(Dictionary) var tracked_effects = null
 export(Dictionary) var translation_keys_needing_operator = null
 export(Dictionary) var translation_keys_needing_percent = null
 
+# EffectBehaviorService
+export(Array, Resource) var scene_effect_behaviors
+export(Array, Resource) var enemy_effect_behaviors
+export(Array, Resource) var player_effect_behaviors
+
 func add_resources() -> void:
     add_if_not_null(ItemService.characters, characters)
     add_if_not_null(ItemService.entities, entities)
@@ -47,7 +52,12 @@ func add_resources() -> void:
     add_if_not_null(ItemService.weapons, weapons)
     add_if_not_null(ItemService.effects, effects)
     add_starting_weapons()
-    
+
+    if backgrounds != null:
+        ItemService.add_backgrounds(backgrounds)
+        for zone in ZoneService.zones:
+            zone.default_backgrounds.append_array(backgrounds)
+
     if challenges != null:
         ChallengeService.challenges.append_array(challenges)
         ChallengeService.set_stat_challenges()
@@ -55,21 +65,21 @@ func add_resources() -> void:
     if zones != null:
         ZoneService.zones.append_array(zones)
     
-    if backgrounds != null:
-        ItemService.add_backgrounds(backgrounds)
-        for zone in ZoneService.zones:
-            zone.default_backgrounds.append_array(backgrounds)
+    if scene_effect_behaviors != null:
+        EffectBehaviorService.scene_effect_behaviors.append_array(scene_effect_behaviors)
+    if enemy_effect_behaviors != null:
+        EffectBehaviorService.enemy_effect_behaviors.append_array(enemy_effect_behaviors)
+    if player_effect_behaviors != null:
+        EffectBehaviorService.player_effect_behaviors.append_array(player_effect_behaviors)
 
     if translation_keys_needing_operator != null:
         Text.keys_needing_operator.merge(translation_keys_needing_operator)
-    
     if translation_keys_needing_percent != null:
         Text.keys_needing_percent.merge(translation_keys_needing_percent)
     
     if tracked_items != null:
         var tracked_items_hashes: Dictionary = Utils.convert_dictionary_to_hash(tracked_items)
         RunData.init_tracked_items.merge(tracked_items_hashes)
-    
     if tracked_effects != null:
         var tracked_effects_hashes: Dictionary = Utils.convert_dictionary_to_hash(tracked_effects)
         RunData.ncl_init_tracked_effects.merge(tracked_effects_hashes)
