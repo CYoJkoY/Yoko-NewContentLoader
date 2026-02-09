@@ -8,10 +8,6 @@ const scales: Array = [
     {"value": 1000.0, "suffix": "K"}
 ]
 
-# =========================== Extension =========================== #
-
-# =========================== Custom =========================== #
-
 # =========================== Method =========================== #
 func ncl_delete_projectile(proj: Node2D) -> void:
     proj.hide()
@@ -77,11 +73,6 @@ func ncl_curse_item(item_data: ItemParentData, player_index: int) -> ItemParentD
     var dlc: DLCData = ProgressData.get_dlc_data("abyssal_terrors")
     return dlc.curse_item(item_data, player_index)
 
-func ncl_create_tracking(key: String, value: float) -> String:
-    var color: String = Utils.SECONDARY_FONT_COLOR_HTML
-    var key_text: String = tr(key)
-    return "[color=%s]%s[/color]" % [color, key_text.format([value])]
-
 func ncl_curse_enemy(enemy: Enemy) -> void:
     var curse: float = Utils.sum_all_player_stats(Keys.stat_curse_hash)
     var main: Node = get_scene_node()
@@ -91,3 +82,9 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
 
         effect_behavior._curse_enemy(enemy, curse)
         break
+
+func ncl_create_tracking(key: String, value: float) -> String:
+    var color: String = Utils.SECONDARY_FONT_COLOR_HTML
+    var key_text: String = tr(key)
+    var str_value: String = str(value) if value < 999 else tr("INFINITE")
+    return "[color=%s]%s[/color]" % [color, key_text.format([str_value])]

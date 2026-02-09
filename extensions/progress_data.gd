@@ -39,5 +39,3 @@ func ncl_check_for_available_mods() -> void:
 
         DebugService.log_data("Found mod's NewContent.tres file, loading resources from: " + mod_data_id)
         ncl_available_contents.append(mod_content)
-
-# =========================== Method =========================== #

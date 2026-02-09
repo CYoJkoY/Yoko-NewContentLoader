@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+
+[deps]
+
+files=[ "res://mods-unpacked/Yoko-NewContentLoader/translations/NewContentLoader.en.translation", "res://mods-unpacked/Yoko-NewContentLoader/translations/NewContentLoader.zh.translation" ]
+
+source_file="res://mods-unpacked/Yoko-NewContentLoader/translations/NewContentLoader.csv"
+dest_files=[ "res://mods-unpacked/Yoko-NewContentLoader/translations/NewContentLoader.en.translation", "res://mods-unpacked/Yoko-NewContentLoader/translations/NewContentLoader.zh.translation" ]
+
+[params]
+
+compress=true
+delimiter=0
