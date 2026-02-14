@@ -19,3 +19,4 @@ func _init():
     ModLoaderMod.install_script_extension(ext_dir.plus_file("progress_data.gd"))
     ModLoaderMod.install_script_extension(ext_dir.plus_file("run_data.gd"))
     ModLoaderMod.install_script_extension(ext_dir.plus_file("utils.gd"))
+    ModLoaderMod.install_script_extension(ext_dir.plus_file("floating_text_manager.gd"))
