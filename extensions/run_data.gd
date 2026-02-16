@@ -20,8 +20,6 @@ func resume_from_state(state: Dictionary) -> void:
     .resume_from_state(state)
     ncl_tracked_effects = Utils.convert_to_hash_array(state.ncl_tracked_effects.duplicate())
 
-# =========================== Custom =========================== #
-
 # =========================== Methods =========================== #
 func ncl_init_tracking_effects() -> Dictionary:
     return ncl_init_tracked_effects.duplicate(true)

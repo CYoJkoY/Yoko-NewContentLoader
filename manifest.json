@@ -10,16 +10,16 @@
 	"extra": {
 		"godot": {
 			"authors": [
-				"Yoko"
+
 			],
 			"optional_dependencies": [
 
 			],
 			"compatible_game_version": [
-				"0.0.1"
+
 			],
 			"compatible_mod_loader_version": [
-				"6.1.0"
+				"6.2.0"
 			],
 			"incompatibilities": [
 

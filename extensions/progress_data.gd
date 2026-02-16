@@ -3,22 +3,11 @@ extends "res://singletons/progress_data.gd"
 var ncl_available_contents: Array = []
 
 # =========================== Extension =========================== #
-func _ready() -> void:
+func _init() -> void:
     ncl_check_for_available_mods()
-
-    for ncl_available_content in ncl_available_contents:
-        ncl_available_content.add_resources()
-
-    RunData.reset()
-
-    if DebugService.generate_full_unlocked_save_file:
-        unlock_all()
-        save()
-    else:
-        load_game_file()
-        add_unlocked_by_default()
-
-    set_max_selectable_difficulty()
+    
+    for mod_content in ncl_available_contents:
+        available_dlcs.append(mod_content)
 
 # =========================== Custom =========================== #
 func ncl_check_for_available_mods() -> void:
@@ -27,15 +16,20 @@ func ncl_check_for_available_mods() -> void:
         var mod_data: ModData = mod_datas[mod_data_id]
         var dependencies: PoolStringArray = mod_data.manifest.dependencies
         if !dependencies.has("Yoko-NewContentLoader"):
-            DebugService.log_data("[Skip] Can't find Yoko-NewContentLoader dependence in %s manifest" % [mod_data_id])
+            ModLoaderLog.info("[NCL] Skip %s: Dependency missing" % [mod_data_id], mod_data_id)
             continue
 
-        var content_dir: String = mod_data.dir_path.plus_file("NewContentData.tres")
-        var mod_content: Resource = load(content_dir)
+        var content_path: String = mod_data.dir_path.plus_file("NewContentData.tres")
+        var dir = Directory.new()
 
-        if mod_content == null:
-            DebugService.log_data("[Skip] Can't find NewContentData.tres file in %s folder" % [mod_data_id])
-            continue
+        if not dir.file_exists(content_path):
+             ModLoaderLog.info("[NCL] Skip %s: NewContentData.tres not found" % [mod_data_id], mod_data_id)
+             continue
 
-        DebugService.log_data("Found mod's NewContent.tres file, loading resources from: " + mod_data_id)
-        ncl_available_contents.append(mod_content)
+        var mod_content = load(content_path)
+
+        if mod_content != null:
+            ModLoaderLog.info("[NCL] Successfully found content for: " + mod_data_id, mod_data_id)
+            ncl_available_contents.append(mod_content)
+        else:
+            ModLoaderLog.info("[NCL] Error: Failed to load %s" % [content_path], mod_data_id)

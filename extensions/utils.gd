@@ -78,7 +78,7 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
     var main: Node = get_scene_node()
     var effect_behaviors: Array = main._effect_behaviors.get_children()
     for effect_behavior in effect_behaviors:
-        if !(effect_behavior is CurseSceneEffectBehavior): continue
+        if !(effect_behavior.has_method("_curse_enemy")): continue
 
         effect_behavior._curse_enemy(enemy, curse)
         break
@@ -86,7 +86,7 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
 func ncl_create_tracking(key: String, value: float) -> String:
     var color: String = Utils.SECONDARY_FONT_COLOR_HTML
     var key_text: String = tr(key)
-    var str_value: String = str(value) if value < 999 else tr("INFINITE")
+    var str_value: String = str(value) if value < 999 else "∞"
     return "[color=%s]%s[/color]" % [color, key_text.format([str_value])]
 
 func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float:
