@@ -3,7 +3,7 @@ extends Resource
 export(String) var my_id
 var my_id_hash: int = Keys.empty_hash
 
-
+# Other
 export(Array, Resource) var groups_in_all_zones = []
 export(Array, Resource) var music_tracks = []
 
