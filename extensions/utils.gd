@@ -9,26 +9,6 @@ const scales: Array = [
 ]
 
 # =========================== Method =========================== #
-func ncl_delete_projectile(proj: Node2D) -> void:
-    proj.hide()
-    proj.velocity = Vector2.ZERO
-    proj._hitbox.collision_layer = proj._original_collision_layer
-    proj._enable_stop_delay = false
-    proj._elapsed_delay = 0
-    proj._sprite.material = null
-    proj._animation_player.stop()
-    proj.set_physics_process(false)
-
-    disconnect_all_signal_connections(proj, "hit_something")
-    disconnect_all_signal_connections(proj._hitbox, "killed_something")
-
-    if is_instance_valid(proj._hitbox.from) and \
-    proj._hitbox.from.has_signal("died") and \
-    proj._hitbox.from.is_connected("died", proj, "on_entity_died"):
-        proj._hitbox.from.disconnect("died", proj, "on_entity_died")
-    
-    proj.queue_free()
-
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] += value
