@@ -162,10 +162,10 @@ func remove_resources() -> void:
     ItemService.init_unlocked_pool()
 
 func update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
-	return base_consumable_data
+    return base_consumable_data
 
 func update_item_effects(item: ItemParentData, _player_index: int) -> ItemParentData:
-	return item
+    return item
 
 # =========================== Method =========================== #
 func add_if_not_null(array, _items) -> void:
