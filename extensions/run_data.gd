@@ -1,8 +1,5 @@
 extends "res://singletons/run_data.gd"
 
-const NCL_HASH_UINT32_RANGE: int = 4294967296
-const NCL_HASH_INT32_MAX: int = 2147483647
-
 var ncl_init_tracked_effects: Dictionary = {}
 
 var ncl_tracked_effects: Array = [ {}, {}, {}, {}]
@@ -29,7 +26,7 @@ func ncl_init_tracking_effects() -> Dictionary:
 
 func ncl_add_effect_tracking_value(ncl_tracking_key_hash: int, value: float, player_index: int, index: int = 0) -> void:
     if !ncl_tracked_effects[player_index].has(ncl_tracking_key_hash):
-        print("[add] ncl tracking key %s does not exist" % ncl_tracking_key_hash)
+        ModLoaderLog.info("[add] ncl tracking key %s does not exist" % ncl_tracking_key_hash, "Yoko-NewContentLoader")
         return
 
     if ncl_tracked_effects[player_index][ncl_tracking_key_hash] is Array:
@@ -39,7 +36,7 @@ func ncl_add_effect_tracking_value(ncl_tracking_key_hash: int, value: float, pla
 
 func ncl_set_effect_tracking_value(ncl_tracking_key_hash: int, value: float, player_index: int, index: int = 0) -> void:
     if !ncl_tracked_effects[player_index].has(ncl_tracking_key_hash):
-        print("[set] ncl tracking key %s does not exist" % ncl_tracking_key_hash)
+        ModLoaderLog.info("[set] ncl tracking key %s does not exist" % ncl_tracking_key_hash, "Yoko-NewContentLoader")
         return
 
     if ncl_tracked_effects[player_index][ncl_tracking_key_hash] is Array:
@@ -49,7 +46,7 @@ func ncl_set_effect_tracking_value(ncl_tracking_key_hash: int, value: float, pla
 
 func ncl_get_effect_tracking_value(ncl_tracking_key_hash: int, player_index: int, index: int = 0) -> float:
     if !ncl_tracked_effects[player_index].has(ncl_tracking_key_hash):
-        print("[get] ncl tracking key %s does not exist" % ncl_tracking_key_hash)
+        ModLoaderLog.info("[get] ncl tracking key %s does not exist" % ncl_tracking_key_hash, "Yoko-NewContentLoader")
         return 0.0
     
     if ncl_tracked_effects[player_index][ncl_tracking_key_hash] is Array:
