@@ -7,7 +7,7 @@ var ncl_tracked_effects: Array = [ {}, {}, {}, {}]
 # =========================== Extension =========================== #
 func reset(restart: bool = false) -> void:
     .reset(restart)
-    for player_index in ncl_tracked_effects.size():
+    for player_index in range(ncl_tracked_effects.size()):
         ncl_tracked_effects[player_index] = ncl_init_tracking_effects()
 
 func get_state() -> Dictionary:
