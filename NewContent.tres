@@ -1,0 +1,37 @@
+[gd_resource type="Resource" load_steps=2 format=2]
+
+[ext_resource path="res://mods-unpacked/Yoko-NewContentLoader/NewContent.gd" type="Script" id=1]
+
+[resource]
+script = ExtResource( 1 )
+my_id = ""
+groups_in_all_zones = [  ]
+music_tracks = [  ]
+backgrounds = [  ]
+characters = [  ]
+entities = [  ]
+elites = [  ]
+bosses = [  ]
+stats = [  ]
+items = [  ]
+weapons = [  ]
+effects = [  ]
+consumables = [  ]
+upgrades = [  ]
+sets = [  ]
+difficulties = [  ]
+icons = [  ]
+title_screen_backgrounds = [  ]
+challenges = [  ]
+zones = [  ]
+tracked_items = {
+}
+tracked_effects = {
+}
+translation_keys_needing_operator = {
+}
+translation_keys_needing_percent = {
+}
+scene_effect_behaviors = [  ]
+enemy_effect_behaviors = [  ]
+player_effect_behaviors = [  ]

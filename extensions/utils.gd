@@ -63,10 +63,10 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
         effect_behavior._curse_enemy(enemy, curse)
         break
 
-func ncl_create_tracking(key: String, value: float) -> String:
+func ncl_create_tracking(key: String, value: float, show_inf: bool = true) -> String:
     var color: String = Utils.SECONDARY_FONT_COLOR_HTML
     var key_text: String = tr(key)
-    var str_value: String = str(value) if value < 999 else "∞"
+    var str_value: String = str(value) if !show_inf else "∞" if value >= 999 else str(value)
     return "[color=%s]%s[/color]" % [color, key_text.format([str_value])]
 
 func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float:
@@ -105,3 +105,15 @@ func ncl_get_signed_col(value: float, base_value: float) -> String:
     if value > base_value: return col_pos_a
     elif value == base_value: return col_neutral_a
     else: return col_neg_a
+
+func ncl_change_weapon(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
+    var player: Player = get_scene_node()._players[player_index]
+    var current_weapons: Array = player.current_weapons
+    var old_wepaon: Weapon = current_weapons[weapon_position]
+
+    RunData.remove_weapon_by_index(weapon_position, player_index)
+    current_weapons.erase(old_wepaon)
+    old_wepaon.queue_free()
+    var new_weapon_data: WeaponData = ItemService.get_element(ItemService.weapons, new_weapon_id)
+    RunData.add_weapon(new_weapon_data, player_index)
+    player.call_deferred("add_weapon", new_weapon_data, weapon_position)
