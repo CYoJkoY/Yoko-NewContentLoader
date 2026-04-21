@@ -98,13 +98,17 @@ func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, ba
 
     return text
 
-func ncl_get_signed_col(value: float, base_value: float) -> String:
-    var col_pos_a: String = "#" + ProgressData.settings.color_positive
-    var col_neutral_a: String = "white"
-    var col_neg_a: String = "#" + ProgressData.settings.color_negative
-    if value > base_value: return col_pos_a
-    elif value == base_value: return col_neutral_a
-    else: return col_neg_a
+func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
+    var colors = {
+        "pos": "#" + ProgressData.settings.color_positive,
+        "neg": "#" + ProgressData.settings.color_negative,
+        "neutral": "white"
+    }
+
+    var comparison = sign(value - base_value)
+    if comparison == 0: return colors["neutral"]
+    if !reverse: return colors["pos"] if comparison > 0 else colors["neg"]
+    else: return colors["neg"] if comparison > 0 else colors["pos"]
 
 func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
     var player: Player = get_scene_node()._players[player_index]
