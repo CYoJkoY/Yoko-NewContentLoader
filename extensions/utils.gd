@@ -73,7 +73,15 @@ func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float
     var dmg: float = 0.0
     for stat in scaling_stats:
         dmg += stat[1] * Utils.get_stat(stat[0], player_index)
+
     return dmg
+
+func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, player_index: int) -> float:
+    var scaling_stats_dmg: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
+    var dmg: float = base_damage + scaling_stats_dmg
+    var final_dmg: float = dmg * (1.0 + Utils.get_stat(Keys.stat_percent_damage_hash, player_index) / 100.0)
+
+    return final_dmg
 
 func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, base_damage: int, options: Dictionary = {}) -> String:
     var nb: int = options.get("nb", 1)
@@ -97,6 +105,9 @@ func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, ba
     text += " (" + WeaponService.get_scaling_stats_icon_text(p_scaling_stats) + ")"
 
     return text
+
+func ncl_get_range_with_detection(base_range: int, range_rate: float, player_index: int, detection: int = 200) -> float:
+    return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
 func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
     var colors = {
