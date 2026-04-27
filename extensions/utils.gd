@@ -106,7 +106,7 @@ func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, ba
 
     return text
 
-func ncl_get_range_with_detection(base_range: int, range_rate: float, player_index: int, detection: int = 200) -> float:
+func ncl_get_range_with_detection(base_range: int, range_rate: float, player_index: int = -1, detection: int = 200) -> float:
     return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
 func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
@@ -176,3 +176,12 @@ func ncl_create_custom_damage_args(player_index: int, color: Color = Color.white
 	if icon_hash != Keys.empty_hash: args.set_meta("custom_icon", icon_hash)
 
 	return args
+
+func ncl_get_validate_node_name(name: String) -> String:
+    var result: String = name
+    var first_index = result.find("@")
+    var second_index = result.find("@", 1)
+    if second_index == -1: result = result.substr(0, first_index)
+    else: result = result.substr(1, second_index - 1)
+
+    return result
