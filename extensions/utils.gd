@@ -1,13 +1,5 @@
 extends "res://singletons/utils.gd"
 
-const scales: Array = [
-    {"value": 1000000000000000.0, "suffix": "P"},
-    {"value": 1000000000000.0, "suffix": "T"},
-    {"value": 1000000000.0, "suffix": "B"},
-    {"value": 1000000.0, "suffix": "M"},
-    {"value": 1000.0, "suffix": "K"}
-]
-
 # =========================== Method =========================== #
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
@@ -15,21 +7,11 @@ func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     RunData._are_player_stats_dirty[player_index] = true
     Utils.reset_stat_cache(player_index)
 
-func ncl_format_number(number: float) -> String:
-    var is_negative: bool = number < 0
-    var abs_number: float = abs(number)
-    
-    var result: String = str(abs_number)
-    if abs_number >= 1000.0:
-        for scale in scales:
-            if abs_number >= scale.value:
-                result = str(stepify(abs_number / scale.value, 0.01)) + scale.suffix
-                break
-    
-    if is_negative and abs_number != 0.0:
-        result = "-" + result
-    
-    return result
+func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
+    var effects: Dictionary = RunData.get_player_effects(player_index)
+    effects[stat_hash] = value
+    RunData._are_player_stats_dirty[player_index] = true
+    Utils.reset_stat_cache(player_index)
 
 func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary = {}) -> float:
     var step: float = options.get("step", 0.01)
@@ -94,12 +76,12 @@ func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, ba
             damage += effect.get_bonus_damage(player_index)
 
     var color: String = ncl_get_signed_col(damage, base_damage)
-    var dmg_text: String = "[color=%s]%s[/color]" % [color, ncl_format_number(damage)]
+    var dmg_text: String = "[color=%s]%s[/color]" % [color, str(damage)]
 
     var text = dmg_text if nb == 1 else "%sx%s" % [dmg_text, str(nb)]
 
     if damage != base_damage and show_initial:
-        var initial_dmg_text = ncl_format_number(base_damage) if nb == 1 else ncl_format_number(base_damage) + "x" + str(nb)
+        var initial_dmg_text = str(base_damage) if nb == 1 else str(base_damage) + "x" + str(nb)
         text += " [color=%s]|%s[/color]" % [Utils.GRAY_COLOR_STR, initial_dmg_text]
 
     text += " (" + WeaponService.get_scaling_stats_icon_text(p_scaling_stats) + ")"
@@ -124,42 +106,44 @@ func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) 
 func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
     var player: Player = get_scene_node()._players[player_index]
     var current_weapons: Array = player.current_weapons
-    var old_wepaon: Weapon = current_weapons[weapon_position]
+    var old_weapon: Weapon = current_weapons[weapon_position]
     var removed_weapon_tracked_value: int = 0
 
     removed_weapon_tracked_value = RunData.remove_weapon_by_index(weapon_position, player_index)
-    current_weapons.erase(old_wepaon)
+    current_weapons.erase(old_weapon)
+
+    for current_weapon in current_weapons:
+        if current_weapon.weapon_pos > old_weapon.weapon_pos:
+            current_weapon.weapon_pos -= 1
 
     var new_weapon_data: WeaponData = ItemService.get_element(ItemService.weapons, new_weapon_id)
-    if old_wepaon.is_cursed:
-        var new_cursed_weapon_min_factor: float = old_wepaon.curse_factor
-        for effect in old_wepaon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
+    if old_weapon.is_cursed:
+        var new_cursed_weapon_min_factor: float = old_weapon.curse_factor
+        for effect in old_weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
         new_weapon_data = ncl_curse_item(new_weapon_data, player_index, false, new_cursed_weapon_min_factor)
 
     var new_weapon: WeaponData = RunData.add_weapon(new_weapon_data, player_index)
     new_weapon.tracked_value = removed_weapon_tracked_value
-    
-    old_wepaon.queue_free()
-    player.call_deferred("add_weapon", new_weapon_data, weapon_position)
 
-func ncl_change_weapon_within_shop(weapon_position: int, new_weapon_id: int, player_index: int, shop: BaseShop) -> void:
+    old_weapon.queue_free()
+    player.call_deferred("add_weapon", new_weapon_data, current_weapons.size())
+
+func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, player_index: int, shop: BaseShop) -> void:
     var weapons_container_elements: Inventory = shop._get_gear_container(player_index).weapons_container._elements
-    var current_weapons: Array = RunData.get_player_weapons(player_index)
-    var old_wepaon: WeaponData = current_weapons[weapon_position]
     var removed_weapon_tracked_value: int = 0
 
-    removed_weapon_tracked_value = RunData.remove_weapon_by_index(weapon_position, player_index)
-    weapons_container_elements.remove_element(old_wepaon)
+    removed_weapon_tracked_value = RunData.remove_weapon(weapon, player_index)
+    weapons_container_elements.remove_element(weapon)
 
     var new_weapon_data: WeaponData = ItemService.get_element(ItemService.weapons, new_weapon_id)
-    if old_wepaon.is_cursed:
-        var new_cursed_weapon_min_factor: float = old_wepaon.curse_factor
-        for effect in old_wepaon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
+    if weapon.is_cursed:
+        var new_cursed_weapon_min_factor: float = weapon.curse_factor
+        for effect in weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
         new_weapon_data = ncl_curse_item(new_weapon_data, player_index, false, new_cursed_weapon_min_factor)
 
     var new_weapon: WeaponData = RunData.add_weapon(new_weapon_data, player_index)
     new_weapon.tracked_value = removed_weapon_tracked_value
-    new_weapon.dmg_dealt_last_wave = old_wepaon.dmg_dealt_last_wave
+    new_weapon.dmg_dealt_last_wave = weapon.dmg_dealt_last_wave
 
     shop._update_stats(player_index)
     shop._get_shop_items_container(player_index).reload_shop_items()

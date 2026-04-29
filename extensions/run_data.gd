@@ -7,9 +7,8 @@ var ncl_tracked_effects: Array = [ {}, {}, {}, {}]
 # =========================== Extension =========================== #
 func reset(restart: bool = false) -> void:
     .reset(restart)
-    for player_index in range(ncl_tracked_effects.size()):
-        ncl_tracked_effects[player_index] = ncl_init_tracking_effects()
-
+    _ncl_tracked_effects_reset()
+    
 func get_state() -> Dictionary:
     var state: Dictionary =.get_state()
     state.ncl_tracked_effects = ncl_tracked_effects.duplicate(true)
@@ -19,6 +18,10 @@ func get_state() -> Dictionary:
 func resume_from_state(state: Dictionary) -> void:
     .resume_from_state(state)
     ncl_tracked_effects = Utils.convert_to_hash_array(state.ncl_tracked_effects.duplicate())
+
+# =========================== Custom =========================== #
+func _ncl_tracked_effects_reset() -> void:
+    for player_index in range(ncl_tracked_effects.size()): ncl_tracked_effects[player_index] = ncl_init_tracking_effects()
 
 # =========================== Methods =========================== #
 func ncl_init_tracking_effects() -> Dictionary:
@@ -30,9 +33,9 @@ func ncl_add_effect_tracking_value(ncl_tracking_key_hash: int, value: float, pla
         return
 
     if ncl_tracked_effects[player_index][ncl_tracking_key_hash] is Array:
-        ncl_tracked_effects[player_index][ncl_tracking_key_hash][index] += value as int
+        ncl_tracked_effects[player_index][ncl_tracking_key_hash][index] += int(value)
     else:
-        ncl_tracked_effects[player_index][ncl_tracking_key_hash] += value as int
+        ncl_tracked_effects[player_index][ncl_tracking_key_hash] += int(value)
 
 func ncl_set_effect_tracking_value(ncl_tracking_key_hash: int, value: float, player_index: int, index: int = 0) -> void:
     if !ncl_tracked_effects[player_index].has(ncl_tracking_key_hash):
@@ -40,9 +43,9 @@ func ncl_set_effect_tracking_value(ncl_tracking_key_hash: int, value: float, pla
         return
 
     if ncl_tracked_effects[player_index][ncl_tracking_key_hash] is Array:
-        ncl_tracked_effects[player_index][ncl_tracking_key_hash][index] = value as int
+        ncl_tracked_effects[player_index][ncl_tracking_key_hash][index] = int(value)
     else:
-        ncl_tracked_effects[player_index][ncl_tracking_key_hash] = value as int
+        ncl_tracked_effects[player_index][ncl_tracking_key_hash] = int(value)
 
 func ncl_get_effect_tracking_value(ncl_tracking_key_hash: int, player_index: int, index: int = 0) -> float:
     if !ncl_tracked_effects[player_index].has(ncl_tracking_key_hash):
