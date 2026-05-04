@@ -38,7 +38,7 @@ func ncl_curse_item(item_data: ItemParentData, player_index: int, turn_randomiza
 
 func ncl_curse_enemy(enemy: Enemy) -> void:
     var curse: float = Utils.sum_all_player_stats(Keys.stat_curse_hash)
-    var main: Node = get_scene_node()
+    var main: Main = get_scene_node()
     var effect_behaviors: Array = main._effect_behaviors.get_children()
     for effect_behavior in effect_behaviors:
         if !(effect_behavior.has_method("_curse_enemy")): continue
@@ -170,3 +170,22 @@ func ncl_get_validate_node_name(name: String) -> String:
     else: result = result.substr(1, second_index - 1)
 
     return result
+
+func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: int) -> void:
+    var main: Main = get_scene_node()
+    for _i in range(num):
+        var consumable_to_spawn: ConsumableData = ItemService.get_element(ItemService.consumables, consumable_id)
+        var consumable: Consumable = main.get_node_from_pool(main._consumable_pool_id, main._consumables_container)
+        if consumable == null:
+            consumable = main.consumable_scene.instance()
+            main._consumables_container.call_deferred("add_child", consumable)
+            var _error = consumable.connect("picked_up", main, "on_consumable_picked_up")
+            yield (consumable, "ready")
+
+        consumable.already_picked_up = false
+        consumable.consumable_data = consumable_to_spawn
+        consumable.set_texture(consumable_to_spawn.icon)
+        var dist = rand_range(50, 100 + spread)
+        var push_back_destination = ZoneService.get_rand_pos_in_area(pos, dist, 0)
+        consumable.drop(pos, 0, push_back_destination)
+        main._consumables.push_back(consumable)

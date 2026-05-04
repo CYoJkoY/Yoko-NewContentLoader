@@ -23,7 +23,7 @@ func resume_from_state(state: Dictionary) -> void:
 func _ncl_tracked_effects_reset() -> void:
     for player_index in range(ncl_tracked_effects.size()): ncl_tracked_effects[player_index] = ncl_init_tracking_effects()
 
-# =========================== Methods =========================== #
+# =========================== Method =========================== #
 func ncl_init_tracking_effects() -> Dictionary:
     return ncl_init_tracked_effects.duplicate(true)
 
