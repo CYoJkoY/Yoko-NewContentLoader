@@ -167,6 +167,10 @@ func update_consumable_to_get(base_consumable_data: ConsumableData) -> Consumabl
 func update_item_effects(item: ItemParentData, _player_index: int) -> ItemParentData:
     return item
 
+# =========================== Custom =========================== #
+func ncl_update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
+    return base_consumable_data
+
 # =========================== Method =========================== #
 func add_if_not_null(array, _items) -> void:
     if _items.empty(): return
