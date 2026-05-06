@@ -46,10 +46,11 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
         effect_behavior._curse_enemy(enemy, curse)
         break
 
-func ncl_create_tracking(key: String, value: float, show_inf: bool = true) -> String:
+func ncl_create_tracking(key: String, value: float, show_inf: bool = false) -> String:
     var color: String = Utils.SECONDARY_FONT_COLOR_HTML
     var key_text: String = tr(key)
-    var str_value: String = str(value) if !show_inf else "∞" if value >= 999 else str(value)
+    var str_value: String = str(value) if !show_inf else \
+        "∞" if value >= 999 else str(value)
     return "[color=%s]%s[/color]" % [color, key_text.format([str_value])]
 
 func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float:
@@ -89,7 +90,8 @@ func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, ba
 
     return text
 
-func ncl_get_range_with_detection(base_range: int, range_rate: float, player_index: int = -1, detection: int = 200) -> float:
+func ncl_get_range_with_detection(base_range: int, range_rate: float = 0.0, player_index: int = -1, detection: int = 200) -> float:
+    if range_rate == 0.0 or player_index == -1: return float(detection + base_range)
     return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
 func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
@@ -103,6 +105,13 @@ func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) 
     if comparison == 0: return colors["neutral"]
     if !reverse: return colors["pos"] if comparison > 0 else colors["neg"]
     else: return colors["neg"] if comparison > 0 else colors["pos"]
+
+func ncl_queue_free_weapon(weapon: Node2D):
+	weapon._current_cooldown = Utils.LARGE_NUMBER
+	weapon.disable_hitbox()
+	weapon.disable_target_tracking()
+	weapon.visible = false
+	disable_node(weapon)
 
 func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
     var player: Player = get_scene_node()._players[player_index]
@@ -126,7 +135,7 @@ func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, play
     var new_weapon: WeaponData = RunData.add_weapon(new_weapon_data, player_index)
     new_weapon.tracked_value = removed_weapon_tracked_value
 
-    old_weapon.queue_free()
+    ncl_queue_free_weapon(old_weapon)
     player.call_deferred("add_weapon", new_weapon_data, current_weapons.size())
 
 func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, player_index: int, shop: BaseShop) -> void:
