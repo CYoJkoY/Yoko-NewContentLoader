@@ -1,5 +1,7 @@
 extends "res://singletons/utils.gd"
 
+enum GearType {ITEM, WEAPON}
+
 # =========================== Method =========================== #
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
@@ -126,7 +128,7 @@ func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, play
         if current_weapon.weapon_pos > old_weapon.weapon_pos:
             current_weapon.weapon_pos -= 1
 
-    var new_weapon_data: WeaponData = ItemService.get_element(ItemService.weapons, new_weapon_id)
+    var new_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(new_weapon_id)
     if old_weapon.is_cursed:
         var new_cursed_weapon_min_factor: float = old_weapon.curse_factor
         for effect in old_weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
@@ -145,7 +147,7 @@ func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, playe
     removed_weapon_tracked_value = RunData.remove_weapon(weapon, player_index)
     weapons_container_elements.remove_element(weapon)
 
-    var new_weapon_data: WeaponData = ItemService.get_element(ItemService.weapons, new_weapon_id)
+    var new_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(new_weapon_id)
     if weapon.is_cursed:
         var new_cursed_weapon_min_factor: float = weapon.curse_factor
         for effect in weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
@@ -198,3 +200,55 @@ func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: in
         var push_back_destination = ZoneService.get_rand_pos_in_area(pos, dist, 0)
         consumable.drop(pos, 0, push_back_destination)
         main._consumables.push_back(consumable)
+
+func ncl_judge_item_type_from_my_id(my_id: int) -> int:
+    if ItemService.is_item_id(my_id): return GearType.ITEM
+    elif ItemService.ncl_is_weapon_id(my_id): return GearType.WEAPON
+    return -1
+
+func ncl_get_nb_gear(gear_id: int, player_index: int) -> int:
+    var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
+    if gear_type == GearType.ITEM: return RunData.get_nb_item(gear_id, player_index)
+    elif gear_type == GearType.WEAPON: return RunData.ncl_get_nb_weapon(gear_id, player_index)
+    return 0
+
+func ncl_add_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
+    var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
+    if gear_type == GearType.ITEM:
+        var item_data: ItemData = ItemService.get_item_from_id(gear_id)
+        for _i in range(num):
+            item_data = ItemService.apply_item_effect_modifications(item_data, player_index)
+            RunData.add_item(item_data, player_index)
+    
+    elif gear_type == GearType.WEAPON:
+        var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
+        for _i in range(num):
+            weapon_data = ItemService.apply_item_effect_modifications(weapon_data, player_index)
+            RunData.add_weapon(weapon_data, player_index)
+
+func ncl_remove_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
+    var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
+    if gear_type == GearType.ITEM:
+        var item_data: ItemData = ItemService.get_item_from_id(gear_id)
+        for _i in range(num): RunData.remove_item(item_data, player_index, true)
+    
+    elif gear_type == GearType.WEAPON:
+        var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
+        for _i in range(num): RunData.ncl_remove_weapon_by_id(weapon_data, player_index)
+
+func ncl_get_gear_name_from_id(gear_id: int, num: int = 1) -> String:
+    var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
+
+    if gear_type == GearType.ITEM:
+        var item_data: ItemData = ItemService.get_item_from_id(gear_id)
+        var tier_color: String = ItemService.get_color_from_tier(item_data.tier).to_html()
+        if num > 1: return "[color=#%s]%s x%d[/color] " % [tier_color, item_data.get_name_text(), num]
+        return "[color=#%s]%s[/color]" % [tier_color, item_data.get_name_text()]
+
+    elif gear_type == GearType.WEAPON:
+        var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
+        var tier_color: String = ItemService.get_color_from_tier(weapon_data.tier).to_html()
+        if num > 1: return "[color=#%s]%s x%d[/color] " % [tier_color, weapon_data.get_name_text(), num]
+        return "[color=#%s]%s[/color]" % [tier_color, weapon_data.get_name_text()]
+
+    return ""
