@@ -24,6 +24,9 @@ export(Array, Resource) var difficulties = []
 export(Array, Resource) var icons = []
 export(Array, Resource) var title_screen_backgrounds = []
 
+# Translations
+export(Array, Translation) var translations
+
 # ChallengeService
 export(Array, Resource) var challenges = []
 
@@ -67,6 +70,9 @@ func duplicate(subresources := false) -> Resource:
 
 func add_resources() -> void:
     _generate_hashes()
+
+    for translation in translations:
+        TranslationServer.add_translation(translation)
 
     add_if_not_null(ZoneService.zones, zones)
 
@@ -120,6 +126,9 @@ func add_resources() -> void:
     ItemService.init_unlocked_pool()
 
 func remove_resources() -> void:
+    for translation in translations:
+        TranslationServer.remove_translation(translation)
+
     erase_if_not_null(ZoneService.zones, zones)
 
     if backgrounds != null:
