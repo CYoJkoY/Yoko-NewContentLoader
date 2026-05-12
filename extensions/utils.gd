@@ -16,6 +16,8 @@ func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
     Utils.reset_stat_cache(player_index)
 
 func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary = {}) -> float:
+    var modifier_scale: float = options.get("modifier_scale", 1.0)
+    modifier *= modifier_scale
     var step: float = options.get("step", 0.01)
     var process_negative: bool = options.get("process_negative", true)
     var is_negative: bool = options.get("is_negative", false)
@@ -62,18 +64,20 @@ func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float
 
     return dmg
 
-func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, player_index: int) -> float:
+func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, player_index: int) -> int:
     var scaling_stats_dmg: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
     var dmg: float = base_damage + scaling_stats_dmg
-    var final_dmg: float = dmg * (1.0 + Utils.get_stat(Keys.stat_percent_damage_hash, player_index) / 100.0)
+    var final_dmg: int = int(dmg * (1.0 + Utils.get_stat(Keys.stat_percent_damage_hash, player_index) / 100.0))
+    final_dmg = int(max(1, final_dmg))
 
     return final_dmg
 
-func ncl_get_dmg_text_with_scaling_stats(damage: int, p_scaling_stats: Array, base_damage: int, options: Dictionary = {}) -> String:
+func ncl_get_dmg_text_with_scaling_stats(base_damage: int, p_scaling_stats: Array, options: Dictionary = {}) -> String:
     var nb: int = options.get("nb", 1)
     var effects: Array = options.get("effects", [])
     var player_index: int = options.get("player_index", -1)
     var show_initial: bool = options.get("show_initial", true)
+    var damage: float = ncl_get_dmg_with_scaling_stats(base_damage, p_scaling_stats, player_index)
 
     for effect in effects:
         if effect is PlayerHealthStatEffect and effect.key == "stat_damage":
