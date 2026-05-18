@@ -72,11 +72,19 @@ func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, pl
 
     return final_dmg
 
-func ncl_get_dmg_text_with_scaling_stats(base_damage: int, p_scaling_stats: Array, options: Dictionary = {}) -> String:
-    var nb: int = options.get("nb", 1)
-    var effects: Array = options.get("effects", [])
-    var player_index: int = options.get("player_index", -1)
-    var show_initial: bool = options.get("show_initial", true)
+func ncl_get_dmg_text_with_scaling_stats(
+    base_damage: int, p_scaling_stats: Array,
+    options: Dictionary = {
+        "nb": 1,
+        "effects": [],
+        "player_index": - 1,
+        "show_initial": true
+    }
+) -> String:
+    var nb: int = options.nb
+    var effects: Array = options.effects
+    var player_index: int = options.player_index
+    var show_initial: bool = options.show_initial
     var damage: float = ncl_get_dmg_with_scaling_stats(base_damage, p_scaling_stats, player_index)
 
     for effect in effects:
