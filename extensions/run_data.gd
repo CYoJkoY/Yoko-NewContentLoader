@@ -72,5 +72,6 @@ func ncl_remove_weapon_by_id(weapon: WeaponData, player_index: int) -> int:
         removed_weapon_tracked_value = current_weapon.tracked_value
         weapons.erase(current_weapon)
         break
+
     after_weapon_removed(weapon, player_index)
     return removed_weapon_tracked_value
