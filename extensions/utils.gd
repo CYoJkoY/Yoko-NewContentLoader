@@ -15,6 +15,13 @@ func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
     RunData._are_player_stats_dirty[player_index] = true
     Utils.reset_stat_cache(player_index)
 
+# Options:
+# - modifier_scale: float = 1.0
+# - step: float = 0.01
+# - process_negative: bool = true
+# - is_negative: bool = false
+# - min_num: float = NAN
+# - max_num: float = NAN
 func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary = {}) -> float:
     var modifier_scale: float = options.get("modifier_scale", 1.0)
     modifier *= modifier_scale
@@ -72,6 +79,18 @@ func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, pl
 
     return final_dmg
 
+func ncl_get_num_with_scaling_stats(base_num: int, p_scaling_stats: Array, player_index: int) -> int:
+    var scaling_stats_num: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
+    var num: float = base_num + scaling_stats_num
+    var final_num: int = int(max(1, num))
+
+    return final_num
+
+# Options:
+# - nb: int = 1
+# - effects: Array = []
+# - player_index: int = -1
+# - show_initial: bool = true
 func ncl_get_dmg_text_with_scaling_stats(
     base_damage: int, p_scaling_stats: Array,
     options: Dictionary = {}
@@ -94,6 +113,38 @@ func ncl_get_dmg_text_with_scaling_stats(
     if damage != base_damage and show_initial:
         var initial_dmg_text = str(base_damage) if nb == 1 else str(base_damage) + "x" + str(nb)
         text += " [color=%s]|%s[/color]" % [Utils.GRAY_COLOR_STR, initial_dmg_text]
+
+    text += " (" + WeaponService.get_scaling_stats_icon_text(p_scaling_stats) + ")"
+
+    return text
+
+# Options:
+# - nb: int = 1
+# - effects: Array = []
+# - player_index: int = -1
+# - show_initial: bool = true
+func ncl_get_num_text_with_scaling_stats(
+    base_num: int, p_scaling_stats: Array,
+    options: Dictionary = {}
+) -> String:
+    var nb: int = options.get("nb", 1)
+    var effects: Array = options.get("effects", [])
+    var player_index: int = options.get("player_index", -1)
+    var show_initial: bool = options.get("show_initial", true)
+    var num: float = ncl_get_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
+
+    for effect in effects:
+        if effect is PlayerHealthStatEffect and effect.key == "stat_damage":
+            num += effect.get_bonus_damage(player_index)
+
+    var color: String = ncl_get_signed_col(num, base_num)
+    var num_text: String = "[color=%s]%s[/color]" % [color, str(num)]
+
+    var text = num_text if nb == 1 else "%sx%s" % [num_text, str(nb)]
+
+    if num != base_num and show_initial:
+        var initial_num_text = str(base_num) if nb == 1 else str(base_num) + "x" + str(nb)
+        text += " [color=%s]|%s[/color]" % [Utils.GRAY_COLOR_STR, initial_num_text]
 
     text += " (" + WeaponService.get_scaling_stats_icon_text(p_scaling_stats) + ")"
 
