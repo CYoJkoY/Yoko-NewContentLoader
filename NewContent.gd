@@ -202,16 +202,15 @@ func ncl_update_consumable_to_get(base_consumable_data: ConsumableData) -> Consu
     return base_consumable_data
 
 # =========================== Method =========================== #
-func add_if_not_null(array, _items) -> void:
+func add_if_not_null(array: Array, _items: Array) -> void:
     if _items.empty(): return
-    
+
     array.append_array(_items)
 
 func erase_if_not_null(array, _items) -> void:
     if _items.empty(): return
-    
-    for _item in _items:
-        array.erase(_item)
+
+    for _item in _items: array.erase(_item)
 
 func add_starting_weapons() -> void:
     if weapons.empty(): return
