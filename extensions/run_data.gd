@@ -17,7 +17,8 @@ func get_state() -> Dictionary:
 
 func resume_from_state(state: Dictionary) -> void:
     .resume_from_state(state)
-    ncl_tracked_effects = Utils.convert_to_hash_array(state.ncl_tracked_effects.duplicate())
+    _ncl_tracked_effects_reset()
+    ncl_tracked_effects = Utils.convert_to_hash_array(state.ncl_tracked_effects.duplicate(true))
 
 # =========================== Custom =========================== #
 func _ncl_tracked_effects_reset() -> void:
