@@ -15,6 +15,30 @@ const NEW_CONTENT_RESOURCE_PATH: String = "res://mods-unpacked/Yoko-NewContentLo
 const DLC1_DATA_RESOURCE_PATH: String = "res://dlcs/dlc_1/dlc_data.tres"
 const DLC1_DATA_SCRIPT_PATH: String = "res://dlcs/dlc_1/dlc_1_data.gd"
 const NCL_DLC1_DATA_EXTENSION_PATH: String = "res://mods-unpacked/Yoko-NewContentLoader/extensions/dlcs/dlc_1/dlc_1_data.gd"
+const CONTENT_ARRAY_PROPERTIES: Array = [
+	"groups_in_all_zones",
+	"music_tracks",
+	"backgrounds",
+	"characters",
+	"entities",
+	"elites",
+	"bosses",
+	"stats",
+	"items",
+	"weapons",
+	"effects",
+	"consumables",
+	"upgrades",
+	"sets",
+	"difficulties",
+	"icons",
+	"title_screen_backgrounds",
+	"challenges",
+	"zones",
+	"scene_effect_behaviors",
+	"enemy_effect_behaviors",
+	"player_effect_behaviors"
+]
 
 var mod_datas: Dictionary = ModLoaderMod.get_mod_data_all()
 var mod_content_configs: Array = [
@@ -80,6 +104,7 @@ func ncl_check_for_available_mods() -> void:
 		var dlc1_mod_content: Resource = ncl_load_content(mod_data, mod_data_id, 1)
 
 		var mod_content: Resource = ncl_merge_contents(common_mod_content, dlc1_mod_content, mod_data_id)
+		ncl_log_content_report(mod_content, mod_data_id)
 		ModLoaderLog.info("[NCL] Successfully load %s" % [mod_content.my_id], mod_data_id)
 
 		available_dlcs.append(mod_content)
@@ -158,3 +183,36 @@ func ncl_merge_dictionaries(dict1: Dictionary, dict2: Dictionary) -> Dictionary:
 	var result = dict1.duplicate()
 	if !dict2.empty(): result.merge(dict2, true)
 	return result
+
+func ncl_log_content_report(content: Resource, mod_data_id: String) -> void:
+	var summary: Array = []
+	for property_name in CONTENT_ARRAY_PROPERTIES:
+		var value = content.get(property_name)
+		if !(value is Array): continue
+		var count: int = value.size()
+		if count <= 0: continue
+
+		summary.append("%s=%d" % [property_name, count])
+		ncl_log_duplicate_resource_ids(property_name, value, mod_data_id)
+
+	if !summary.empty():
+		ModLoaderLog.info("[NCL] Content report: %s" % [PoolStringArray(summary).join(", ")], mod_data_id)
+
+func ncl_log_duplicate_resource_ids(property_name: String, resources: Array, mod_data_id: String) -> void:
+	var seen: Dictionary = {}
+	var duplicates: Array = []
+	for resource in resources:
+		if resource == null: continue
+
+		var raw_resource_id = resource.get("my_id")
+		if raw_resource_id == null: continue
+
+		var resource_id: String = str(raw_resource_id)
+		if resource_id == "": continue
+		if seen.has(resource_id):
+			duplicates.append(resource_id)
+		else:
+			seen[resource_id] = true
+
+	if !duplicates.empty():
+		ModLoaderLog.error("[NCL] Duplicate ids in %s: %s" % [property_name, PoolStringArray(duplicates).join(", ")], mod_data_id)

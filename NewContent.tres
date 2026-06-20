@@ -28,6 +28,7 @@ tracked_items = {
 }
 tracked_effects = {
 }
+quiet_stat_keys = [  ]
 translation_keys_needing_operator = {
 }
 translation_keys_needing_percent = {

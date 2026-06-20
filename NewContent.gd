@@ -38,6 +38,8 @@ export(Dictionary) var tracked_items = {}
 var tracked_items_hash: Dictionary = {}
 export(Dictionary) var tracked_effects = {}
 var tracked_effects_hash: Dictionary = {}
+export(Array) var quiet_stat_keys = []
+var quiet_stat_keys_hash: Array = []
 export(Array) var primary_stats_list = []
 var primary_stats_list_hash: Array = []
 export(Array) var effect_keys_full_serialization = []
@@ -71,6 +73,7 @@ func duplicate(subresources := false) -> Resource:
     duplication.my_id_hash = my_id_hash
     duplication.tracked_items_hash = tracked_items_hash.duplicate()
     duplication.tracked_effects_hash = tracked_effects_hash.duplicate()
+    duplication.quiet_stat_keys_hash = quiet_stat_keys_hash.duplicate()
     duplication.primary_stats_list_hash = primary_stats_list_hash.duplicate()
     duplication.effect_keys_full_serialization_hash = effect_keys_full_serialization_hash.duplicate()
     duplication.effect_keys_with_weapon_stats_hash = effect_keys_with_weapon_stats_hash.duplicate()
@@ -131,6 +134,10 @@ func add_resources() -> void:
     if tracked_effects != null:
         tracked_effects_hash = Utils.convert_dictionary_to_hash(tracked_effects)
         RunData.ncl_init_tracked_effects.merge(tracked_effects_hash)
+    if quiet_stat_keys != null:
+        quiet_stat_keys_hash = Utils.convert_to_hash_array(quiet_stat_keys)
+        Utils.ncl_register_quiet_stat_keys(quiet_stat_keys_hash)
+        Utils.call_deferred("ncl_validate_quiet_stat_keys", quiet_stat_keys_hash, my_id)
     if primary_stats_list != null:
         primary_stats_list_hash = Utils.convert_to_hash_array(primary_stats_list)
         RunData.primary_stats_list.append_array(primary_stats_list_hash)
@@ -142,6 +149,7 @@ func add_resources() -> void:
         RunData.effect_keys_with_weapon_stats.append_array(effect_keys_with_weapon_stats_hash)
 
     ItemService.init_unlocked_pool()
+    ItemService.ncl_rebuild_weapon_my_id_lookup()
 
 func remove_resources() -> void:
     for translation in translations:
@@ -185,11 +193,13 @@ func remove_resources() -> void:
 
     erase_if_not_null(RunData.init_tracked_items, tracked_items_hash)
     erase_if_not_null(RunData.ncl_init_tracked_effects, tracked_effects_hash)
+    Utils.ncl_unregister_quiet_stat_keys(quiet_stat_keys_hash)
     erase_if_not_null(RunData.primary_stats_list, primary_stats_list_hash)
     erase_if_not_null(RunData.effect_keys_full_serialization, effect_keys_full_serialization_hash)
     erase_if_not_null(RunData.effect_keys_with_weapon_stats, effect_keys_with_weapon_stats_hash)
 
     ItemService.init_unlocked_pool()
+    ItemService.ncl_rebuild_weapon_my_id_lookup()
 
 func update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
     return base_consumable_data

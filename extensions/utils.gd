@@ -3,6 +3,7 @@ extends "res://singletons/utils.gd"
 enum GearType {ITEM, WEAPON}
 
 var ncl_dlc1_curse_item_passes: Array = []
+var ncl_quiet_stat_keys: Dictionary = {}
 
 # =========================== Method =========================== #
 func ncl_register_dlc1_curse_item_pass(pass_id: String, owner: Object, method_name: String, priority: int = 100) -> void:
@@ -29,6 +30,19 @@ func ncl_sort_dlc1_curse_item_passes(a: Dictionary, b: Dictionary) -> bool:
     if int(a["priority"]) == int(b["priority"]):
         return str(a["id"]) < str(b["id"])
     return int(a["priority"]) < int(b["priority"])
+
+func ncl_register_quiet_stat_keys(stat_keys: Array) -> void:
+    for stat_key in stat_keys: ncl_quiet_stat_keys[stat_key] = true
+
+func ncl_unregister_quiet_stat_keys(stat_keys: Array) -> void:
+    for stat_key in stat_keys: ncl_quiet_stat_keys.erase(stat_key)
+
+func ncl_validate_quiet_stat_keys(stat_keys: Array, content_id: String) -> void:
+    var effects: Dictionary = PlayerRunData.init_effects()
+    for stat_key in stat_keys:
+        if effects.has(stat_key): continue
+
+        ModLoaderLog.error("[NCL] Quiet stat key is not initialized in PlayerRunData.init_effects(): %s" % [str(stat_key)], content_id)
 
 func ncl_apply_dlc1_curse_item_passes(
     original_item: ItemParentData,
@@ -66,12 +80,14 @@ func ncl_apply_dlc1_curse_item_passes(
     return result
 
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
+    assert(ncl_quiet_stat_keys.has(stat_hash), "NCL quiet stat key is not registered")
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] += value
     RunData._are_player_stats_dirty[player_index] = true
     Utils.reset_stat_cache(player_index)
 
 func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
+    assert(ncl_quiet_stat_keys.has(stat_hash), "NCL quiet stat key is not registered")
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] = value
     RunData._are_player_stats_dirty[player_index] = true
@@ -216,6 +232,11 @@ func ncl_get_range_with_detection(base_range: int, range_rate: float = 0.0, play
     if range_rate == 0.0 or player_index == -1: return float(detection + base_range)
     return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
+func ncl_get_range_text_with_scaling(base_range: int, range_rate: float, player_index: int) -> String:
+    var total_range: int = int(Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate + base_range)
+    var range_scaling_text: String = Utils.get_scaling_stat_icon_text(Keys.stat_range_hash, range_rate)
+    return "[color=%s]%s[/color] (%s)" % [ncl_get_signed_col(total_range, base_range), total_range, range_scaling_text]
+
 func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
     var colors = {
         "pos": "#" + ProgressData.settings.color_positive,
@@ -335,15 +356,15 @@ func ncl_get_nb_gear(gear_id: int, player_index: int) -> int:
 func ncl_add_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
     var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
     if gear_type == GearType.ITEM:
-        var item_data: ItemData = ItemService.get_item_from_id(gear_id)
+        var base_item_data: ItemData = ItemService.get_item_from_id(gear_id)
         for _i in range(num):
-            item_data = ItemService.apply_item_effect_modifications(item_data, player_index)
+            var item_data: ItemData = ItemService.apply_item_effect_modifications(base_item_data, player_index)
             RunData.add_item(item_data, player_index)
     
     elif gear_type == GearType.WEAPON:
-        var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
+        var base_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
         for _i in range(num):
-            weapon_data = ItemService.apply_item_effect_modifications(weapon_data, player_index)
+            var weapon_data: WeaponData = ItemService.apply_item_effect_modifications(base_weapon_data, player_index)
             RunData.add_weapon(weapon_data, player_index)
 
 func ncl_remove_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
