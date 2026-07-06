@@ -64,7 +64,7 @@ func _init() -> void:
 func _generate_hashes() -> void:
     my_id_hash = Keys.generate_hash(my_id)
 
-func duplicate(subresources := false) -> Resource:
+func duplicate(subresources:=false) -> Resource:
     var duplication =.duplicate(subresources)
 
     if my_id_hash == Keys.empty_hash:
@@ -148,6 +148,8 @@ func add_resources() -> void:
         effect_keys_with_weapon_stats_hash = Utils.convert_to_hash_array(effect_keys_with_weapon_stats)
         RunData.effect_keys_with_weapon_stats.append_array(effect_keys_with_weapon_stats_hash)
 
+    add_custom_resources()
+
     ItemService.init_unlocked_pool()
     ItemService.ncl_rebuild_weapon_my_id_lookup()
 
@@ -198,6 +200,8 @@ func remove_resources() -> void:
     erase_if_not_null(RunData.effect_keys_full_serialization, effect_keys_full_serialization_hash)
     erase_if_not_null(RunData.effect_keys_with_weapon_stats, effect_keys_with_weapon_stats_hash)
 
+    remove_custom_resources()
+
     ItemService.init_unlocked_pool()
     ItemService.ncl_rebuild_weapon_my_id_lookup()
 
@@ -247,3 +251,9 @@ func erase_starting_weapons() -> void:
         for character_id in weapon.add_to_chars_as_starting:
             var character_data = ItemService.get_element_safe(ItemService.characters, character_id)
             character_data.starting_weapons.erase(weapon)
+
+func add_custom_resources() -> void:
+    pass
+
+func remove_custom_resources() -> void:
+    pass
