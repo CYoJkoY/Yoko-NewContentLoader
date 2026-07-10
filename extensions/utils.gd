@@ -3,7 +3,6 @@ extends "res://singletons/utils.gd"
 enum GearType {ITEM, WEAPON}
 
 var ncl_dlc1_curse_item_passes: Array = []
-var ncl_quiet_stat_keys: Dictionary = {}
 
 # =========================== Method =========================== #
 func ncl_register_dlc1_curse_item_pass(pass_id: String, owner: Object, method_name: String, priority: int = 100) -> void:
@@ -30,19 +29,6 @@ func ncl_sort_dlc1_curse_item_passes(a: Dictionary, b: Dictionary) -> bool:
     if int(a["priority"]) == int(b["priority"]):
         return str(a["id"]) < str(b["id"])
     return int(a["priority"]) < int(b["priority"])
-
-func ncl_register_quiet_stat_keys(stat_keys: Array) -> void:
-    for stat_key in stat_keys: ncl_quiet_stat_keys[stat_key] = true
-
-func ncl_unregister_quiet_stat_keys(stat_keys: Array) -> void:
-    for stat_key in stat_keys: ncl_quiet_stat_keys.erase(stat_key)
-
-func ncl_validate_quiet_stat_keys(stat_keys: Array, content_id: String) -> void:
-    var effects: Dictionary = PlayerRunData.init_effects()
-    for stat_key in stat_keys:
-        if effects.has(stat_key): continue
-
-        ModLoaderLog.error("[NCL] Quiet stat key is not initialized in PlayerRunData.init_effects(): %s" % [str(stat_key)], content_id)
 
 func ncl_apply_dlc1_curse_item_passes(
     original_item: ItemParentData,
@@ -80,14 +66,12 @@ func ncl_apply_dlc1_curse_item_passes(
     return result
 
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
-    assert(ncl_quiet_stat_keys.has(stat_hash), "NCL quiet stat key is not registered")
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] += value
     RunData._are_player_stats_dirty[player_index] = true
     Utils.reset_stat_cache(player_index)
 
 func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
-    assert(ncl_quiet_stat_keys.has(stat_hash), "NCL quiet stat key is not registered")
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] = value
     RunData._are_player_stats_dirty[player_index] = true
