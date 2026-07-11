@@ -104,7 +104,12 @@ func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary =
 
     return value
 
-func ncl_curse_item(item_data: ItemParentData, player_index: int, turn_randomization_off: bool = false, min_modifier: float = 0.0) -> ItemParentData:
+func ncl_curse_item(
+    item_data: ItemParentData,
+    player_index: int,
+    turn_randomization_off: bool = false,
+    min_modifier: float = 0.0
+) -> ItemParentData:
     var dlc_1: DLCData = ProgressData.get_dlc_data("abyssal_terrors")
     if dlc_1 == null: return item_data
     return dlc_1.curse_item(item_data, player_index, turn_randomization_off, min_modifier)
@@ -148,13 +153,15 @@ func ncl_get_num_with_scaling_stats(base_num: int, p_scaling_stats: Array, playe
 
     return final_num
 
+# Get dmg affected by % percent damage
 # Options:
 # - nb: int = 1
 # - effects: Array = []
 # - player_index: int = -1
 # - show_initial: bool = true
 func ncl_get_dmg_text_with_scaling_stats(
-    base_damage: int, p_scaling_stats: Array,
+    base_damage: int,
+    p_scaling_stats: Array,
     options: Dictionary = {}
 ) -> String:
     var nb: int = options.get("nb", 1)
@@ -180,13 +187,15 @@ func ncl_get_dmg_text_with_scaling_stats(
 
     return text
 
+# Get num not affected by % percent damage
 # Options:
 # - nb: int = 1
 # - effects: Array = []
 # - player_index: int = -1
 # - show_initial: bool = true
 func ncl_get_num_text_with_scaling_stats(
-    base_num: int, p_scaling_stats: Array,
+    base_num: int,
+    p_scaling_stats: Array,
     options: Dictionary = {}
 ) -> String:
     var nb: int = options.get("nb", 1)
@@ -377,3 +386,14 @@ func ncl_get_gear_name_from_id(gear_id: int, num: int = 1) -> String:
         return "[color=#%s]%s[/color]" % [tier_color, weapon_data.get_name_text()]
 
     return ""
+
+func ncl_get_true_stat_name(stat: String) -> String:
+    var stat_name: String = stat.to_lower()
+
+    match stat_name:
+        "": stat_name = tr("EMPTY")
+        "number_of_enemies": stat_name = tr("PCT_NUMBER_OF_ENEMIES")
+        "different_item": stat_name = tr("ITEM")
+        _: stat_name = tr(stat.to_upper())
+
+    return stat_name
