@@ -38,11 +38,11 @@ export(Dictionary) var tracked_items = {}
 var tracked_items_hash: Dictionary = {}
 export(Dictionary) var tracked_effects = {}
 var tracked_effects_hash: Dictionary = {}
-export(Array) var primary_stats_list = []
+export(Array, String) var primary_stats_list = []
 var primary_stats_list_hash: Array = []
-export(Array) var effect_keys_full_serialization = []
+export(Array, String) var effect_keys_full_serialization = []
 var effect_keys_full_serialization_hash = []
-export(Array) var effect_keys_with_weapon_stats = []
+export(Array, String) var effect_keys_with_weapon_stats = []
 var effect_keys_with_weapon_stats_hash = []
 
 # Text
@@ -85,7 +85,7 @@ func add_resources() -> void:
 
     add_if_not_null(ZoneService.zones, zones)
 
-    if backgrounds != null:
+    if !backgrounds.empty():
         ItemService.add_backgrounds(backgrounds)
         for zone in ZoneService.zones:
             add_if_not_null(zone.default_backgrounds, backgrounds)
@@ -112,7 +112,7 @@ func add_resources() -> void:
     
     Utils.reset_stat_keys()
 
-    if challenges != null:
+    if !challenges.empty():
         ChallengeService.challenges.append_array(challenges)
         ChallengeService.set_stat_challenges()
     
@@ -120,24 +120,24 @@ func add_resources() -> void:
     add_if_not_null(EffectBehaviorService.enemy_effect_behaviors, enemy_effect_behaviors)
     add_if_not_null(EffectBehaviorService.player_effect_behaviors, player_effect_behaviors)
 
-    if translation_keys_needing_operator != null:
+    if !translation_keys_needing_operator.empty():
         Text.keys_needing_operator.merge(translation_keys_needing_operator)
-    if translation_keys_needing_percent != null:
+    if !translation_keys_needing_percent.empty():
         Text.keys_needing_percent.merge(translation_keys_needing_percent)
-    
-    if tracked_items != null:
+
+    if !tracked_items.empty():
         tracked_items_hash = Utils.convert_dictionary_to_hash(tracked_items)
         RunData.init_tracked_items.merge(tracked_items_hash)
-    if tracked_effects != null:
+    if !tracked_effects.empty():
         tracked_effects_hash = Utils.convert_dictionary_to_hash(tracked_effects)
         RunData.ncl_init_tracked_effects.merge(tracked_effects_hash)
-    if primary_stats_list != null:
+    if !primary_stats_list.empty():
         primary_stats_list_hash = Utils.convert_to_hash_array(primary_stats_list)
         RunData.primary_stats_list.append_array(primary_stats_list_hash)
-    if effect_keys_full_serialization != null:
+    if !effect_keys_full_serialization.empty():
         effect_keys_full_serialization_hash = Utils.convert_to_hash_array(effect_keys_full_serialization)
         RunData.effect_keys_full_serialization.append_array(effect_keys_full_serialization_hash)
-    if effect_keys_with_weapon_stats != null:
+    if !effect_keys_with_weapon_stats.empty():
         effect_keys_with_weapon_stats_hash = Utils.convert_to_hash_array(effect_keys_with_weapon_stats)
         RunData.effect_keys_with_weapon_stats.append_array(effect_keys_with_weapon_stats_hash)
 
