@@ -2,6 +2,8 @@ extends "res://singletons/utils.gd"
 
 enum GearType {ITEM, WEAPON}
 
+const HASH_PRIME: int = 31
+
 var ncl_dlc1_curse_item_passes: Array = []
 
 # =========================== Method =========================== #
@@ -397,3 +399,10 @@ func ncl_get_true_stat_name(stat: String) -> String:
         _: stat_name = tr(stat.to_upper())
 
     return stat_name
+
+func ncl_generate_composite_hash(values: Array) -> int:
+    var result: int = 1
+    for value in values: 
+        result = result * HASH_PRIME + value
+
+    return result
