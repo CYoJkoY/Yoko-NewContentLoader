@@ -245,11 +245,11 @@ func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) 
     else: return colors["neg"] if comparison > 0 else colors["pos"]
 
 func ncl_queue_free_weapon(weapon: Node2D):
-	weapon._current_cooldown = Utils.LARGE_NUMBER
-	weapon.disable_hitbox()
-	weapon.disable_target_tracking()
-	weapon.visible = false
-	disable_node(weapon)
+    weapon._current_cooldown = Utils.LARGE_NUMBER
+    weapon.disable_hitbox()
+    weapon.disable_target_tracking()
+    weapon.visible = false
+    disable_node(weapon)
 
 func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
     var player: Player = get_scene_node()._players[player_index]
@@ -303,11 +303,11 @@ func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, playe
     SoundManager.play(Utils.get_rand_element(shop.combine_sounds), 0, 0.1, true)
 
 func ncl_create_custom_damage_args(player_index: int, color: Color = Color.white, icon_hash: int = Keys.empty_hash) -> TakeDamageArgs:
-	var args: TakeDamageArgs = TakeDamageArgs.new(player_index)
-	args.set_meta("custom_color", color)
-	if icon_hash != Keys.empty_hash: args.set_meta("custom_icon", icon_hash)
+    var args: TakeDamageArgs = TakeDamageArgs.new(player_index)
+    args.set_meta("custom_color", color)
+    if icon_hash != Keys.empty_hash: args.set_meta("custom_icon", icon_hash)
 
-	return args
+    return args
 
 func ncl_get_validate_node_name(name: String) -> String:
     var result: String = name
