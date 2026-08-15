@@ -4,7 +4,7 @@ var ncl_init_tracked_effects: Dictionary = {}
 
 var ncl_tracked_effects: Array = [ {}, {}, {}, {}]
 
-# =========================== Extension =========================== #
+# ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func reset(restart: bool = false) -> void:
     .reset(restart)
     _ncl_tracked_effects_reset()
@@ -20,11 +20,11 @@ func resume_from_state(state: Dictionary) -> void:
     _ncl_tracked_effects_reset()
     ncl_tracked_effects = Utils.convert_to_hash_array(state.ncl_tracked_effects.duplicate(true))
 
-# =========================== Custom =========================== #
+# ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
 func _ncl_tracked_effects_reset() -> void:
     for player_index in range(ncl_tracked_effects.size()): ncl_tracked_effects[player_index] = ncl_init_tracking_effects()
 
-# =========================== Method =========================== #
+# ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
 func ncl_init_tracking_effects() -> Dictionary:
     return ncl_init_tracked_effects.duplicate(true)
 

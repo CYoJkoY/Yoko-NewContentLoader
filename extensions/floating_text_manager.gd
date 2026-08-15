@@ -1,6 +1,6 @@
 extends "res://visual_effects/floating_text/floating_text_manager.gd"
 
-# =========================== Extension =========================== #
+# ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func _on_unit_took_damage(unit: Unit, value: int, _knockback_direction: Vector2, is_crit: bool, is_dodge: bool, is_protected: bool, armor_did_something: bool, _args: TakeDamageArgs, hit_type: int, is_one_shot: bool) -> void:
     if _args.has_meta("custom_color") or _args.has_meta("custom_icon"):
         if !ProgressData.settings.damage_display: return

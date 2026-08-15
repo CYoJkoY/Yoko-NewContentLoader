@@ -54,7 +54,7 @@ export(Array, Resource) var scene_effect_behaviors = []
 export(Array, Resource) var enemy_effect_behaviors = []
 export(Array, Resource) var player_effect_behaviors = []
 
-# =========================== Custom =========================== #
+# ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
 func _init() -> void:
     if my_id_hash == Keys.empty_hash:
         call_deferred("_generate_hashes")
@@ -203,11 +203,11 @@ func update_consumable_to_get(base_consumable_data: ConsumableData) -> Consumabl
 func update_item_effects(item: ItemParentData, _player_index: int) -> ItemParentData:
     return item
 
-# =========================== Custom =========================== #
+# ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
 func ncl_update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
     return base_consumable_data
 
-# =========================== Method =========================== #
+# ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
 func add_if_not_null(array: Array, _items: Array) -> void:
     if _items.empty(): return
 

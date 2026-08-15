@@ -2,7 +2,7 @@ extends "res://singletons/item_service.gd"
 
 var ncl_weapon_my_id_lookup: Dictionary = {}
 
-# =========================== Extension =========================== #
+# ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func get_consumable_to_drop(unit: Unit, item_chance: float) -> ConsumableData:
     var consumable: ConsumableData =.get_consumable_to_drop(unit, item_chance)
     for dlc_id in RunData.enabled_dlcs:
@@ -13,7 +13,7 @@ func get_consumable_to_drop(unit: Unit, item_chance: float) -> ConsumableData:
 
     return consumable
 
-# =========================== Method =========================== #
+# ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
 func ncl_is_weapon_id(weapon_my_id: int) -> bool:
     if !ncl_weapon_my_id_lookup.has(weapon_my_id): ncl_rebuild_weapon_my_id_lookup()
 

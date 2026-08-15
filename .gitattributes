@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+*.gd filter=tabspace
+*.tscn filter=tabspace
+*.tres filter=tabspace
+*.cs filter=tabspace

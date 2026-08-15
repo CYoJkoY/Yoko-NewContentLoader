@@ -6,7 +6,7 @@ const HASH_PRIME: int = 31
 
 var ncl_dlc1_curse_item_passes: Array = []
 
-# =========================== Method =========================== #
+# ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
 func ncl_register_dlc1_curse_item_pass(pass_id: String, owner: Object, method_name: String, priority: int = 100) -> void:
     if pass_id == "" or owner == null or method_name == "":
         return

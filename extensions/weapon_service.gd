@@ -1,6 +1,6 @@
 extends "res://singletons/weapon_service.gd"
 
-# =========================== Extension =========================== #
+# ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func init_base_stats(from_stats: WeaponStats, player_index: int, args: WeaponServiceInitStatsArgs = _init_stats_args_service, is_structure := false, is_special_spawn := false, is_pet := false) -> WeaponStats:
     var class_bonuses: Array = RunData.get_player_effect(Keys.weapon_class_bonus_hash, player_index)
     var crit_chance_class_bonuses: Array = _ncl_take_class_bonus_crit_chance(class_bonuses, args)
@@ -9,7 +9,7 @@ func init_base_stats(from_stats: WeaponStats, player_index: int, args: WeaponSer
     _ncl_apply_class_bonus_crit_chance(base_stats, crit_chance_class_bonuses)
     return base_stats
 
-# =========================== Custom =========================== #
+# ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
 func _ncl_take_class_bonus_crit_chance(class_bonuses: Array, args: WeaponServiceInitStatsArgs) -> Array:
     var removed_bonuses: Array = []
     for i in range(class_bonuses.size() - 1, -1, -1):
