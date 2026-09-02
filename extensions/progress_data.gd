@@ -12,9 +12,6 @@ const PROPERTIES_TO_IGNORE: Array = [
     "my_id_hash"
 ]
 const NEW_CONTENT_RESOURCE_PATH: String = "res://mods-unpacked/Yoko-NewContentLoader/NewContent.tres"
-const DLC1_DATA_RESOURCE_PATH: String = "res://dlcs/dlc_1/dlc_data.tres"
-const DLC1_DATA_SCRIPT_PATH: String = "res://dlcs/dlc_1/dlc_1_data.gd"
-const NCL_DLC1_DATA_EXTENSION_PATH: String = "res://mods-unpacked/Yoko-NewContentLoader/extensions/dlcs/dlc_1/dlc_1_data.gd"
 const CONTENT_ARRAY_PROPERTIES: Array = [
     "groups_in_all_zones",
     "music_tracks",
@@ -50,47 +47,30 @@ var mod_content_configs: Array = [
 
 # ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func check_for_available_dlcs() -> void:
-    ncl_check_for_available_dlc1_extensions()
+    ncl_cheack_for_available_DLC1_gds_install()
     .check_for_available_dlcs()
     ncl_check_for_available_mods()
 
 # ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
-func ncl_check_for_available_dlc1_extensions() -> void:
-    if !ncl_is_dlc1_runtime_available():
-        ModLoaderLog.info("[NCL] Skip: DLC1 runtime data not found", "Yoko-NewContentLoader")
+func ncl_cheack_for_available_DLC1_gds_install() -> void:
+    if not File.new().file_exists("res://dlcs/dlc_1/dlc_data.tres"):
         return
-    if Directory.new().file_exists(NCL_DLC1_DATA_EXTENSION_PATH):
-        ModLoaderMod.install_script_extension(NCL_DLC1_DATA_EXTENSION_PATH)
-        ModLoaderLog.info("[NCL] Installed managed dlc_1_data.gd extension", "Yoko-NewContentLoader")
 
     for mod_data_id in mod_datas:
         var mod_data: ModData = mod_datas[mod_data_id]
         var dependencies: PoolStringArray = mod_data.manifest.dependencies
-        if !dependencies.has("Yoko-NewContentLoader"):
-            ModLoaderLog.info("[NCL] Skip: Dependency missing", mod_data_id)
+        if not dependencies.has("Yoko-NewContentLoader"):
+            ModLoaderLog.info("[NCL] Skip %s: Dependency missing" % [mod_data_id], mod_data_id)
             continue
 
-        ncl_register_dlc1_curse_item_pass(mod_data, mod_data_id)
+        var dlc_1_gd_path: String = mod_data.dir_path.plus_file("extensions/dlc_1_data.gd")
 
-func ncl_is_dlc1_runtime_available() -> bool:
-    return ResourceLoader.exists(DLC1_DATA_RESOURCE_PATH) or Directory.new().file_exists(DLC1_DATA_SCRIPT_PATH)
+        if not Directory.new().file_exists(dlc_1_gd_path):
+            ModLoaderLog.info("[NCL] Skip %s: dlc_1_data.gd not found" % [mod_data_id], mod_data_id)
+            continue
 
-func ncl_register_dlc1_curse_item_pass(mod_data: ModData, mod_data_id: String) -> void:
-    if !Utils.has_method("ncl_register_dlc1_curse_item_pass"):
-        return
-
-    var pass_path: String = mod_data.dir_path.plus_file("extensions/services/dlc1_curse_pass.gd")
-    if !Directory.new().file_exists(pass_path):
-        ModLoaderLog.info("[NCL] Skip: dlc1_curse_pass.gd not found", mod_data_id)
-        return
-
-    var pass_script = load(pass_path)
-    if pass_script == null:
-        ModLoaderLog.info("[NCL] Error: Failed to load dlc1_curse_pass.gd", mod_data_id)
-        return
-
-    Utils.ncl_register_dlc1_curse_item_pass(mod_data_id, pass_script.new(), "apply", 100)
-    ModLoaderLog.info("[NCL] Registered DLC1 curse item pass", mod_data_id)
+        ModLoaderLog.info("[NCL] Successfully found dlc_1_data.gd for: " + mod_data_id, mod_data_id)
+        ModLoaderMod.install_script_extension(dlc_1_gd_path)
 
 func ncl_check_for_available_mods() -> void:
     for mod_data_id in mod_datas:

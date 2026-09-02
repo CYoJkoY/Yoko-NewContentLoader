@@ -4,69 +4,7 @@ enum GearType {ITEM, WEAPON}
 
 const HASH_PRIME: int = 31
 
-var ncl_dlc1_curse_item_passes: Array = []
-
 # ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
-func ncl_register_dlc1_curse_item_pass(pass_id: String, owner: Object, method_name: String, priority: int = 100) -> void:
-    if pass_id == "" or owner == null or method_name == "":
-        return
-
-    for pass_data in ncl_dlc1_curse_item_passes:
-        if pass_data["id"] == pass_id:
-            pass_data["owner"] = owner
-            pass_data["method_name"] = method_name
-            pass_data["priority"] = priority
-            ncl_dlc1_curse_item_passes.sort_custom(self, "ncl_sort_dlc1_curse_item_passes")
-            return
-
-    ncl_dlc1_curse_item_passes.append({
-        "id": pass_id,
-        "owner": owner,
-        "method_name": method_name,
-        "priority": priority
-    })
-    ncl_dlc1_curse_item_passes.sort_custom(self, "ncl_sort_dlc1_curse_item_passes")
-
-func ncl_sort_dlc1_curse_item_passes(a: Dictionary, b: Dictionary) -> bool:
-    if int(a["priority"]) == int(b["priority"]):
-        return str(a["id"]) < str(b["id"])
-    return int(a["priority"]) < int(b["priority"])
-
-func ncl_apply_dlc1_curse_item_passes(
-    original_item: ItemParentData,
-    cursed_item: ItemParentData,
-    player_index: int,
-    turn_randomization_off: bool = false,
-    min_modifier: float = 0.0,
-    dlc_1_data: Object = null
-) -> ItemParentData:
-    if cursed_item != null and cursed_item.has_meta("ncl_dlc1_curse_item_passes_applied"):
-        return cursed_item
-
-    var result: ItemParentData = cursed_item
-    for pass_data in ncl_dlc1_curse_item_passes:
-        var owner: Object = pass_data["owner"]
-        var method_name: String = pass_data["method_name"]
-        if owner == null or !owner.has_method(method_name):
-            continue
-
-        var next_result = owner.call(
-            method_name,
-            original_item,
-            result,
-            player_index,
-            turn_randomization_off,
-            min_modifier,
-            dlc_1_data
-        )
-        if next_result != null:
-            result = next_result
-
-    if result != null:
-        result.set_meta("ncl_dlc1_curse_item_passes_applied", true)
-
-    return result
-
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] += value
@@ -355,7 +293,7 @@ func ncl_add_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
         for _i in range(num):
             var item_data: ItemData = ItemService.apply_item_effect_modifications(base_item_data, player_index)
             RunData.add_item(item_data, player_index)
-    
+
     elif gear_type == GearType.WEAPON:
         var base_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
         for _i in range(num):
@@ -367,7 +305,7 @@ func ncl_remove_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> voi
     if gear_type == GearType.ITEM:
         var item_data: ItemData = ItemService.get_item_from_id(gear_id)
         for _i in range(num): RunData.remove_item(item_data, player_index, true)
-    
+
     elif gear_type == GearType.WEAPON:
         var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
         for _i in range(num): RunData.ncl_remove_weapon_by_id(weapon_data, player_index)
@@ -402,7 +340,7 @@ func ncl_get_true_stat_name(stat: String) -> String:
 
 func ncl_generate_composite_hash(values: Array) -> int:
     var result: int = 1
-    for value in values: 
+    for value in values:
         result = result * HASH_PRIME + value
 
     return result

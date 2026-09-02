@@ -1,40 +1,40 @@
 {
-    "name": "NewContentLoader",
-    "namespace": "Yoko",
-    "version_number": "0.0.1",
-    "description": "",
-    "website_url": "",
-    "dependencies": [
+	"name": "NewContentLoader",
+	"namespace": "Yoko",
+	"version_number": "1.0.0",
+	"description": "",
+	"website_url": "",
+	"dependencies": [
 
-    ],
-    "extra": {
-        "godot": {
-            "authors": [
+	],
+	"extra": {
+		"godot": {
+			"authors": [
 
-            ],
-            "optional_dependencies": [
+			],
+			"optional_dependencies": [
 
-            ],
-            "compatible_game_version": [
+			],
+			"compatible_game_version": [
 
-            ],
-            "compatible_mod_loader_version": [
-                "6.2.0"
-            ],
-            "incompatibilities": [
+			],
+			"compatible_mod_loader_version": [
+				"6.2.0"
+			],
+			"incompatibilities": [
 
-            ],
-            "load_before": [
+			],
+			"load_before": [
 
-            ],
-            "tags": [
+			],
+			"tags": [
 
-            ],
-            "config_schema": {
+			],
+			"config_schema": {
 
-            },
-            "description_rich": "",
-            "image": null
-        }
-    }
+			},
+			"description_rich": "",
+			"image": null
+		}
+	}
 }
