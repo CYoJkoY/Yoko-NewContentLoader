@@ -39,14 +39,20 @@ func install_script_classes() -> void:
         valid_mod_classes.append_array(load(class_service_path).get_classes())
 
     # Unregister obsolete classes and register new ones
-    var registered_classes: Array = ProjectSettings.get_setting("_global_script_classes")
-    var valid_class_names: Dictionary = {}
+    var valid_classes: Dictionary = {}
     for c in valid_mod_classes:
-        valid_class_names[c.class] = true
+        var c_name: String = c.class
+        if valid_classes.has(c_name):
+            continue
 
-    var classes_to_unregister: Array = []
+        valid_classes[c.class] = c
+
+    var registered_classes: Array = ProjectSettings.get_setting("_global_script_classes")
+
+    var keep: Array = []
+    var stale: Dictionary = {}
     for old_class in registered_classes:
-        var old_class_name: String = old_class.class
+        var old_name: String = old_class.class
         var class_path: String = old_class.path
 
         # If old registered class not match any new registered class,
@@ -54,22 +60,36 @@ func install_script_classes() -> void:
         if not class_path.begins_with("res://mods-unpacked/"):
             continue
 
-        if not valid_class_names.has(old_class_name) or not Directory.new().file_exists(class_path):
-            classes_to_unregister.append(old_class)
+        if not valid_classes.has(old_name) or \
+        not Directory.new().file_exists(class_path) or \
+        keep.has(old_name) or \
+        stale.has(old_name):
+            stale[old_name] = true
+        else:
+            keep.append(old_name)
+
+    var classes_to_unregister: Array = []
+    for old_class in registered_classes:
+        if not stale.has(old_class.class):
+            continue
+
+        classes_to_unregister.append(old_class)
 
     if not classes_to_unregister.empty():
         unregister_global_classes_by_array(classes_to_unregister)
 
     # Register new classes if any new classes are found.
     var classes_to_register: Array = []
-    for new_class in valid_mod_classes:
-        var already_registered: bool = registered_classes.has(new_class.class)
+    for c_name in valid_classes:
+        if keep.has(c_name):
+            continue
 
-        if not already_registered:
-            classes_to_register.append(new_class)
+        classes_to_register.append(valid_classes[c_name])
 
     if not classes_to_register.empty():
         ModLoaderMod.register_global_classes_from_array(classes_to_register)
+    else:
+        ModLoaderLog.info("[NCL] All classes already registered, nothing to do.", MYMODNAME_LOG)
 
 func install_script_extensions() -> void:
     var extensions: Array = [
@@ -90,19 +110,19 @@ func install_script_extensions() -> void:
 
 # ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
 static func unregister_global_classes_by_array(classes_to_remove: Array) -> void:
-	var registered_classes: Array = ProjectSettings.get_setting("_global_script_classes")
-	var modified: bool = false
+    var registered_classes: Array = ProjectSettings.get_setting("_global_script_classes")
+    var modified: bool = false
 
-	var class_names_to_remove: Array = []
-	for c in classes_to_remove:
-		class_names_to_remove.append(c.class)
+    var class_names_to_remove: Array = []
+    for c in classes_to_remove:
+        class_names_to_remove.append(c.class)
 
-	for i in range(registered_classes.size() - 1, -1, -1):
-		var registered_class: Dictionary = registered_classes[i]
-		if class_names_to_remove.has(registered_class.class):
-			registered_classes.remove(i)
-			modified = true
+    for i in range(registered_classes.size() - 1, -1, -1):
+        var registered_class: Dictionary = registered_classes[i]
+        if class_names_to_remove.has(registered_class.class):
+            registered_classes.remove(i)
+            modified = true
 
-	if modified:
-		ProjectSettings.set_setting("_global_script_classes", registered_classes)
-		ProjectSettings.save_custom(_ModLoaderPath.get_override_path())
+    if modified:
+        ProjectSettings.set_setting("_global_script_classes", registered_classes)
+        ProjectSettings.save_custom(_ModLoaderPath.get_override_path())
