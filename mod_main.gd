@@ -51,6 +51,9 @@ func install_script_classes() -> void:
 
         # If old registered class not match any new registered class,
         # or its path is invalid, unregister it.
+        if not class_path.begins_with("res://mods-unpacked/"):
+            continue
+
         if not valid_class_names.has(old_class_name) or not Directory.new().file_exists(class_path):
             classes_to_unregister.append(old_class)
 
