@@ -164,6 +164,7 @@ jobs:
               ".otf",
               ".svg",
           }
+          has_import_resource = False
 
           def copy_tree(src, dst):
               for item in src.iterdir():
@@ -181,6 +182,7 @@ jobs:
                           continue
 
                       if item.suffix.lower() in IMPORT_FILE_EXTENSIONS:
+                          has_import_resource = True
                           new_file = dst / item.name.lower()
                       else:
                           # Scripts, scenes, resources, json, csv, etc.
@@ -339,27 +341,28 @@ jobs:
             --exclude='.gdignore' \
             "$MOD_ROOT/" \
             "$STAGE/mods-unpacked/$MOD_DIRECTORY/"
-          if [[ ! -d "$PROJECT/.import" ]]; then
-              echo "::error::Missing generated .import."
-              exit 1
+          # Only package .import when Godot generated it.
+          # Mods without imported assets do not require .import.
+          IMPORT_COUNT=0
+
+          if [[ -d "$PROJECT/.import" ]]; then
+            IMPORT_COUNT=$(find "$PROJECT/.import" \
+                -type f \
+                ! -name '.gdignore' \
+                ! -name '*.csv.import' \
+                ! -name '*.md5' \
+                | wc -l)
+
+            if (( IMPORT_COUNT > 0 )); then
+              mkdir -p "$STAGE/.import"
+              rsync -a \
+                --exclude='.gdignore' \
+                --exclude='*.csv.import' \
+                --exclude='*.md5' \
+                "$PROJECT/.import/" \
+                "$STAGE/.import/"
+            fi
           fi
-          IMPORT_COUNT=$(find "$PROJECT/.import" \
-              -type f \
-              ! -name '.gdignore' \
-              ! -name '*.csv.import' \
-              ! -name '*.md5' \
-              | wc -l)
-          if (( IMPORT_COUNT == 0 )); then
-              echo "::error::No imported resources."
-              exit 1
-          fi
-          mkdir -p "$STAGE/.import"
-          rsync -a \
-            --exclude='.gdignore' \
-            --exclude='*.csv.import' \
-            --exclude='*.md5' \
-            "$PROJECT/.import/" \
-            "$STAGE/.import/"
           find "$STAGE" \
             -type f \
             -name '.gdignore' \
@@ -401,17 +404,14 @@ jobs:
           ZIP="$RUNNER_TEMP/release/$ZIP_NAME"
           MANIFEST_PATH="mods-unpacked/$MOD_DIRECTORY/manifest.json"
           unzip -t "$ZIP"
-          if ! unzip -l "$ZIP" \
-              | grep -Eq '(^|[[:space:]])\.import/'; then
-              echo "::error::Missing .import directory."
-              exit 1
-          fi
           IMPORT_COUNT=$(unzip -l "$ZIP" \
               | grep -E '(^|[[:space:]])\.import/' \
-              | wc -l)
-          if (( IMPORT_COUNT == 0 )); then
-              echo "::error::No imported files."
-              exit 1
+              | wc -l || true)
+
+          if (( IMPORT_COUNT > 0 )); then
+              echo "Verified imported files: $IMPORT_COUNT"
+          else
+              echo "No .import directory required."
           fi
           if unzip -l "$ZIP" \
               | grep -Eq '(^|[[:space:]])\.gdignore($|[[:space:]])'; then
