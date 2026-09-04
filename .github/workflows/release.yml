@@ -1,0 +1,475 @@
+name: Build Mod Release
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  release:
+    name: Build ${{ github.ref_name }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag '$TAG'. Expected vX.Y.Z."
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Read manifest metadata
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f manifest.json || {
+            echo "::error::manifest.json missing."
+            exit 1
+          }
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(
+              Path("manifest.json")
+              .read_text(encoding="utf-8-sig")
+          )
+          for key in (
+              "name",
+              "namespace",
+              "version_number"
+          ):
+              value = data.get(key)
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit(
+                      f"Invalid manifest field: {key}"
+                  )
+          for key in (
+              "name",
+              "namespace"
+          ):
+              value=data[key].strip()
+              if "/" in value or "\\" in value:
+                  raise SystemExit(
+                      f"Invalid manifest.{key}"
+                  )
+          PY
+          NAME="$(python3 -c '
+          import json
+          print(json.load(open(
+              "manifest.json",
+              encoding="utf-8-sig"
+          ))["name"].strip())
+          ')"
+          NAMESPACE="$(python3 -c '
+          import json
+          print(json.load(open(
+              "manifest.json",
+              encoding="utf-8-sig"
+          ))["namespace"].strip())
+          ')"
+          VERSION="${{ steps.version.outputs.version }}"
+          MOD_DIRECTORY="${NAMESPACE}-${NAME}"
+          ZIP_NAME="${NAME}-${VERSION}.zip"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "namespace=$NAMESPACE" >> "$GITHUB_OUTPUT"
+          echo "mod_directory=$MOD_DIRECTORY" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Install Godot 3.7-dev1
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_DIR="$RUNNER_TEMP/godot"
+          mkdir -p "$GODOT_DIR"
+          curl -L --fail --retry 5 --retry-delay 2 \
+          'https://downloads.godotengine.org/?version=3.7&flavor=dev1&platform=linux_headless.64&slug=linux_headless.64.zip' \
+          -o "$GODOT_DIR/godot.zip"
+          unzip -q "$GODOT_DIR/godot.zip" -d "$GODOT_DIR"
+          GODOT_BIN="$(find "$GODOT_DIR" \
+          -type f \
+          -name 'Godot_v3.7-dev1_linux_headless.64' \
+          -print -quit)"
+          if [[ -z "$GODOT_BIN" ]]; then
+              echo "::error::Godot executable missing."
+              exit 1
+          fi
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
+
+      - name: Prepare temporary Godot project
+        env:
+          MOD_DIRECTORY: ${{ steps.manifest.outputs.mod_directory }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$RUNNER_TEMP/mod-project"
+          MOD_ROOT="$PROJECT/mods-unpacked/$MOD_DIRECTORY"
+          rm -rf "$PROJECT"
+          mkdir -p "$MOD_ROOT"
+          echo "Copying Mod source while lowercasing imported asset filenames only..."
+
+          python3 - "$PWD" "$MOD_ROOT" <<'PY'
+          import sys
+          import shutil
+          from pathlib import Path
+
+          source = Path(sys.argv[1])
+          target = Path(sys.argv[2])
+
+          EXCLUDE_DIRS = {
+              ".git",
+              ".github",
+              ".godot",
+              "ci",
+              "dist",
+          }
+
+          EXCLUDE_FILES = {
+              ".gitignore",
+              ".gitattributes",
+          }
+
+          # Only files that Godot imports into .import are renamed.
+          # Directory names and Godot text resources are NEVER modified.
+          IMPORT_FILE_EXTENSIONS = {
+              ".png",
+              ".jpg",
+              ".jpeg",
+              ".webp",
+              ".bmp",
+              ".gif",
+              ".ico",
+              ".dds",
+              ".wav",
+              ".ogg",
+              ".mp3",
+              ".m4a",
+              ".aac",
+              ".ttf",
+              ".otf",
+              ".svg",
+          }
+
+          def copy_tree(src, dst):
+              for item in src.iterdir():
+                  if item.is_dir():
+                      if item.name in EXCLUDE_DIRS:
+                          continue
+
+                      # Keep directory name exactly unchanged.
+                      new_dir = dst / item.name
+                      new_dir.mkdir(parents=True, exist_ok=True)
+                      copy_tree(item, new_dir)
+
+                  elif item.is_file():
+                      if item.name in EXCLUDE_FILES:
+                          continue
+
+                      if item.suffix.lower() in IMPORT_FILE_EXTENSIONS:
+                          new_file = dst / item.name.lower()
+                      else:
+                          # Scripts, scenes, resources, json, csv, etc.
+                          # keep their original filename.
+                          new_file = dst / item.name
+
+                      if new_file.exists():
+                          raise RuntimeError(
+                              f"Filename collision: {new_file}"
+                          )
+
+                      shutil.copy2(item, new_file)
+
+          copy_tree(source, target)
+          print("Imported asset filenames normalized. Other files unchanged.")
+          PY
+
+          cat > "$PROJECT/project.godot" <<'GODOT'
+          ; Temporary CI project.
+          ; Never included in release.
+          config_version=4
+          [application]
+          config/name="Mod CI Import"
+          GODOT
+          echo "Temporary Godot project ready."
+          echo "$PROJECT"
+
+      - name: Update manifest version in temporary copy
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MOD_DIRECTORY: ${{ steps.manifest.outputs.mod_directory }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST="$RUNNER_TEMP/mod-project/mods-unpacked/$MOD_DIRECTORY/manifest.json"
+          VERSION="$VERSION" MANIFEST="$MANIFEST" python3 <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(
+              os.environ["MANIFEST"]
+          )
+          version = os.environ["VERSION"]
+          data=json.loads(
+              path.read_text(
+                  encoding="utf-8-sig"
+              )
+          )
+          data["version_number"]=version
+          path.write_text(
+              json.dumps(
+                  data,
+                  ensure_ascii=False,
+                  indent=2
+              )+"\n",
+              encoding="utf-8"
+          )
+          print(
+              "Manifest updated:",
+              version
+          )
+          PY
+
+      - name: Import resources with Godot 3.7-dev1
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$RUNNER_TEMP/mod-project"
+          IMPORT_DIR="$PROJECT/.import"
+          LOG_FILE="$RUNNER_TEMP/godot-import.log"
+          rm -rf "$IMPORT_DIR"
+          "$GODOT_BIN" \
+            --path "$PROJECT" \
+            --editor \
+            --headless \
+            --audio-driver Dummy \
+            >"$LOG_FILE" 2>&1 &
+          GODOT_PID=$!
+          trap 'kill "$GODOT_PID" 2>/dev/null || true' EXIT
+          DEADLINE=$((SECONDS + 300))
+          LAST_COUNT=-1
+          STABLE=0
+          while (( SECONDS < DEADLINE )); do
+            if ! kill -0 "$GODOT_PID" 2>/dev/null; then
+              echo "::error::Godot exited early."
+              cat "$LOG_FILE"
+              exit 1
+            fi
+            if [[ -d "$IMPORT_DIR" ]]; then
+              COUNT=$(find "$IMPORT_DIR" \
+                -type f \
+                ! -name '.gdignore' \
+                | wc -l)
+              if (( COUNT > 0 )); then
+                if (( COUNT == LAST_COUNT )); then
+                  STABLE=$((STABLE+1))
+                else
+                  STABLE=0
+                  LAST_COUNT=$COUNT
+                fi
+                echo "Imported files: $COUNT stable=$STABLE/5"
+                if (( STABLE >= 5 )); then
+                    break
+                fi
+              fi
+            fi
+            sleep 1
+          done
+          if [[ ! -d "$IMPORT_DIR" ]]; then
+              echo "::error::.import was not generated."
+              cat "$LOG_FILE"
+              exit 1
+          fi
+          IMPORT_COUNT=$(find "$IMPORT_DIR" \
+              -type f \
+              ! -name '.gdignore' \
+              | wc -l)
+          if (( IMPORT_COUNT == 0 )); then
+              echo "::error::.import empty."
+              cat "$LOG_FILE"
+              exit 1
+          fi
+          echo "Godot import finished."
+          echo "Imported count: $IMPORT_COUNT"
+          kill "$GODOT_PID" 2>/dev/null || true
+          wait "$GODOT_PID" 2>/dev/null || true
+          trap - EXIT
+
+      - name: Build ModLoader ZIP
+        env:
+          MOD_DIRECTORY: ${{ steps.manifest.outputs.mod_directory }}
+          ZIP_NAME: ${{ steps.manifest.outputs.zip_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROJECT="$RUNNER_TEMP/mod-project"
+          MOD_ROOT="$PROJECT/mods-unpacked/$MOD_DIRECTORY"
+          STAGE="$RUNNER_TEMP/export-stage"
+          RELEASE="$RUNNER_TEMP/release"
+          ZIP="$RELEASE/$ZIP_NAME"
+          rm -rf "$STAGE" "$RELEASE"
+          mkdir -p \
+            "$STAGE/mods-unpacked/$MOD_DIRECTORY" \
+            "$RELEASE"
+          echo "Copying Mod files..."
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.godot/' \
+            --exclude='project.godot' \
+            --exclude='project.godot.*' \
+            --exclude='export_presets.cfg' \
+            --exclude='.*' \
+            --exclude='*.csv.import' \
+            --exclude='*.md5' \
+            --exclude='.gdignore' \
+            "$MOD_ROOT/" \
+            "$STAGE/mods-unpacked/$MOD_DIRECTORY/"
+          if [[ ! -d "$PROJECT/.import" ]]; then
+              echo "::error::Missing generated .import."
+              exit 1
+          fi
+          IMPORT_COUNT=$(find "$PROJECT/.import" \
+              -type f \
+              ! -name '.gdignore' \
+              ! -name '*.csv.import' \
+              ! -name '*.md5' \
+              | wc -l)
+          if (( IMPORT_COUNT == 0 )); then
+              echo "::error::No imported resources."
+              exit 1
+          fi
+          mkdir -p "$STAGE/.import"
+          rsync -a \
+            --exclude='.gdignore' \
+            --exclude='*.csv.import' \
+            --exclude='*.md5' \
+            "$PROJECT/.import/" \
+            "$STAGE/.import/"
+          find "$STAGE" \
+            -type f \
+            -name '.gdignore' \
+            -delete
+          find "$STAGE" \
+            -type f \
+            -name '*.csv.import' \
+            -delete
+          find "$STAGE" \
+            -type f \
+            -name '*.md5' \
+            -delete
+          STAGED_IMPORT_COUNT=$(find "$STAGE/.import" \
+              -type f \
+              | wc -l)
+          if (( STAGED_IMPORT_COUNT != IMPORT_COUNT )); then
+              echo "::error::Import copy mismatch."
+              exit 1
+          fi
+          echo "Imported files staged: $STAGED_IMPORT_COUNT"
+          (
+            cd "$STAGE"
+            zip -r -q -9 \
+              -n ".png:.webp:.jpg:.jpeg:.gif:.bmp:.ico:.dds:.stex:.ctex:.ogg:.oggstr:.mp3:.aac:.m4a:.mp4:.webm:.zip:.7z:.rar:.gz:.bz2:.xz:.zst" \
+              "$ZIP" .
+          )
+          test -f "$ZIP"
+          echo "Created:"
+          echo "$ZIP"
+
+      - name: Verify ZIP structure
+        env:
+          MOD_DIRECTORY: ${{ steps.manifest.outputs.mod_directory }}
+          ZIP_NAME: ${{ steps.manifest.outputs.zip_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$RUNNER_TEMP/release/$ZIP_NAME"
+          MANIFEST_PATH="mods-unpacked/$MOD_DIRECTORY/manifest.json"
+          unzip -t "$ZIP"
+          if ! unzip -l "$ZIP" \
+              | grep -Eq '(^|[[:space:]])\.import/'; then
+              echo "::error::Missing .import directory."
+              exit 1
+          fi
+          IMPORT_COUNT=$(unzip -l "$ZIP" \
+              | grep -E '(^|[[:space:]])\.import/' \
+              | wc -l)
+          if (( IMPORT_COUNT == 0 )); then
+              echo "::error::No imported files."
+              exit 1
+          fi
+          if unzip -l "$ZIP" \
+              | grep -Eq '(^|[[:space:]])\.gdignore($|[[:space:]])'; then
+              echo "::error::.gdignore exists."
+              exit 1
+          fi
+          if unzip -l "$ZIP" \
+              | grep -Eq '\.csv\.import($|[[:space:]])'; then
+              echo "::error::csv.import exists."
+              exit 1
+          fi
+          if unzip -l "$ZIP" \
+              | grep -Eq '\.md5($|[[:space:]])'; then
+              echo "::error::.md5 exists."
+              exit 1
+          fi
+          if ! unzip -l "$ZIP" \
+              | grep -Fq "$MANIFEST_PATH"; then
+              echo "::error::manifest missing."
+              exit 1
+          fi
+          unzip -p "$ZIP" "$MANIFEST_PATH" \
+              > "$RUNNER_TEMP/release-manifest.json"
+          VERSION="$VERSION" python3 <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          expected=os.environ["VERSION"]
+          path=Path(
+              os.environ["RUNNER_TEMP"]
+          ) / "release-manifest.json"
+          actual=json.loads(
+              path.read_text(
+                  encoding="utf-8"
+              )
+          )["version_number"]
+          if actual != expected:
+              raise SystemExit(
+                  f"Version mismatch {actual}"
+              )
+          print(
+              "Manifest version OK:",
+              actual
+          )
+          PY
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.manifest.outputs.name }}-${{ steps.version.outputs.version }}
+          path: ${{ runner.temp }}/release/${{ steps.manifest.outputs.zip_name }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.manifest.outputs.name }} ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: ${{ runner.temp }}/release/${{ steps.manifest.outputs.zip_name }}
