@@ -262,49 +262,54 @@ jobs:
             >"$LOG_FILE" 2>&1 &
           GODOT_PID=$!
           trap 'kill "$GODOT_PID" 2>/dev/null || true' EXIT
-          DEADLINE=$((SECONDS + 300))
+          echo "Waiting for Godot import scan..."
+          DEADLINE=$((SECONDS + 120))
           LAST_COUNT=-1
           STABLE=0
           while (( SECONDS < DEADLINE )); do
             if ! kill -0 "$GODOT_PID" 2>/dev/null; then
-              break
+              echo "::error::Godot exited unexpectedly."
+              cat "$LOG_FILE" >&2 || true
+              exit 1
             fi
             if [[ -d "$IMPORT_DIR" ]]; then
-              COUNT=$(find "$IMPORT_DIR" \
-                -type f \
-                ! -name '.gdignore' \
-                | wc -l)
+              COUNT=$(find "$IMPORT_DIR" -type f ! -name '.gdignore' | wc -l)
+              echo "Imported files: $COUNT"
               if (( COUNT > 0 )); then
                 if (( COUNT == LAST_COUNT )); then
-                  STABLE=$((STABLE+1))
+                  STABLE=$((STABLE + 1))
                 else
-                  LAST_COUNT=$COUNT
                   STABLE=0
+                  LAST_COUNT=$COUNT
                 fi
-                echo "Imported files: $COUNT stable:$STABLE/5"
                 if (( STABLE >= 5 )); then
+                  echo "Import finished."
+                  break
+                fi
+              else
+                STABLE=$((STABLE + 1))
+                if (( STABLE >= 10 )); then
+                  echo "No imported resources detected."
                   break
                 fi
               fi
+            else
+              STABLE=0
             fi
             sleep 1
           done
           kill "$GODOT_PID" 2>/dev/null || true
           wait "$GODOT_PID" 2>/dev/null || true
           trap - EXIT
-          if [[ ! -d "$IMPORT_DIR" ]]; then
+          if [[ -d "$IMPORT_DIR" ]]; then
+            IMPORT_COUNT=$(find "$IMPORT_DIR" \
+              -type f \
+              ! -name '.gdignore' \
+              | wc -l)
+            echo "Final imported resource count: $IMPORT_COUNT"
+          else
             echo "No .import directory generated."
-            exit 0
           fi
-          IMPORT_COUNT=$(find "$IMPORT_DIR" \
-            -type f \
-            ! -name '.gdignore' \
-            | wc -l)
-          if (( IMPORT_COUNT == 0 )); then
-            echo "No imported resources."
-            exit 0
-          fi
-          echo "Imported resources: $IMPORT_COUNT"
 
       - name: Build ModLoader ZIP
         env:
@@ -370,14 +375,20 @@ jobs:
             -type f \
             -name '*.md5' \
             -delete
-          STAGED_IMPORT_COUNT=$(find "$STAGE/.import" \
-              -type f \
-              | wc -l)
-          if (( STAGED_IMPORT_COUNT != IMPORT_COUNT )); then
-              echo "::error::Import copy mismatch."
-              exit 1
+          if (( IMPORT_COUNT > 0 )); then
+              STAGED_IMPORT_COUNT=$(find "$STAGE/.import" \
+                  -type f \
+                  | wc -l)
+
+              if (( STAGED_IMPORT_COUNT != IMPORT_COUNT )); then
+                  echo "::error::Import copy mismatch."
+                  exit 1
+              fi
+
+              echo "Imported files staged: $STAGED_IMPORT_COUNT"
+          else
+              echo "No imported resources staged."
           fi
-          echo "Imported files staged: $STAGED_IMPORT_COUNT"
           (
             cd "$STAGE"
             zip -r -q -9 \
