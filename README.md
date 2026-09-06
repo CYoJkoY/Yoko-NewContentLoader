@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/header.svg" alt="Yoko-NewContentLoader" width="100%">
+</div>
+
 # Yoko-NewContentLoader
 
 [![Release](https://img.shields.io/github/v/release/CYoJkoY/Yoko-NewContentLoader?display_name=tag&sort=semver)](https://github.com/CYoJkoY/Yoko-NewContentLoader/releases)
