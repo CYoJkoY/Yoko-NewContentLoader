@@ -152,6 +152,7 @@ jobs:
             sleep 1
           done
           if (( FINISHED == 0 && $(date +%s) >= DEADLINE )); then echo '::error::Godot resource import did not reach a stable state within 300 seconds.'; cat "$LOG_FILE" >&2 || true; exit 1; fi
+          if kill -0 "$GODOT_PID" 2>/dev/null; then echo 'Import cache validation complete; stopping Godot.'; kill "$GODOT_PID" 2>/dev/null || true; fi
           wait "$GODOT_PID" 2>/dev/null || true
           PROJECT="$PROJECT" MOD_ROOT="$MOD_ROOT" python3 - <<'PY'
           import os,re
@@ -168,7 +169,9 @@ jobs:
           print(f'Import metadata files: {metadata_count}'); print(f'Declared generated artifacts: {len(expected)}'); print(f'Actual .import cache files: {len(actual)}')
           missing=sorted(expected-actual)
           if missing:
-              print('Missing generated import artifacts:'); [print(f'  - {x}') for x in missing]; raise SystemExit(1)
+              print('Missing generated import artifacts:')
+              for path in missing: print(f'  - {path}')
+              raise SystemExit(1)
           print('All declared Godot import artifacts are present.')
           PY
       - name: Build ModLoader package
@@ -189,8 +192,7 @@ jobs:
             mkdir -p "$STAGE/.import"; rsync -a --exclude='.gdignore' "$PROJECT/.import/" "$STAGE/.import/"
           else echo 'No *.import metadata; no Godot .import cache is required for this Mod.'; fi
           find "$STAGE" -type f \( -name '.gdignore' -o -name '*.md5' -o -name '*.csv.import' \) -delete
-          (cd "$STAGE" && zip -r -q -9 -n '.png:.webp:.jpg:.jpeg:.gif:.bmp:.ico:.dds:.stex:.ctex:.ogg:.oggstr:.mp3:.aac:.m4a:.mp4:.webm:.zip:.7z:.rar:.gz:.bz2:.xz:.zst' "$ZIP" .)
-          test -s "$ZIP"; sha256sum "$ZIP" > "$ZIP.sha256"
+          (cd "$STAGE" && zip -r -q -9 -n '.png:.webp:.jpg:.jpeg:.gif:.bmp:.ico:.dds:.stex:.ctex:.ogg:.oggstr:.mp3:.aac:.m4a:.mp4:.webm:.zip:.7z:.rar:.gz:.bz2:.xz:.zst' "$ZIP" .); test -s "$ZIP"; sha256sum "$ZIP" > "$ZIP.sha256"
       - name: Verify release package
         env:
           MOD_DIRECTORY: ${{ steps.manifest.outputs.mod_directory }}
