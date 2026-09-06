@@ -154,7 +154,7 @@ The workflow also performs Godot resource import, builds the Mod Loader ZIP, pre
 | Engine | Godot 3.x / GDScript |
 | Mod Loader | **6.3.0** |
 | Mod version | **1.1.0** |
-| Brotato game version | Not specified |
+| Brotato game version | **1.15.4** |
 | License | MIT |
 
 Because this library is used by other mods, dependent projects should use a compatible NewContentLoader release and test the entire mod stack together.
