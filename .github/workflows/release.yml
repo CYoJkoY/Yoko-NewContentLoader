@@ -43,10 +43,15 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then TAG="${INPUT_TAG}"; else TAG="${GITHUB_REF_NAME}"; fi
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "::error::Invalid tag '$TAG'. Expected vX.Y.Z."; exit 1; fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag '$TAG'. Expected vX.Y.Z."
+            exit 1
+          fi
           VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate manifest
         id: manifest
@@ -56,33 +61,62 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os
+          import json
+          import os
           from pathlib import Path
-          path=Path('manifest.json')
-          if not path.is_file(): raise SystemExit('manifest.json is missing')
-          data=json.loads(path.read_text(encoding='utf-8-sig'))
-          for key in ('name','namespace','version_number'):
-              value=data.get(key)
-              if not isinstance(value,str) or not value.strip(): raise SystemExit(f'Invalid manifest field: {key}')
-          for key in ('name','namespace'):
-              value=data[key].strip()
-              if '/' in value or '\\' in value or value in {'.','..'}: raise SystemExit(f'Invalid manifest.{key}: {value!r}')
-          name=data['name'].strip(); namespace=data['namespace'].strip(); version=os.environ['VERSION']
-          print(f'Manifest: {namespace}/{name}'); print(f'Repository manifest version: {data["version_number"]}'); print(f'Release version: {version}')
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as out:
-              print(f'name={name}',file=out); print(f'namespace={namespace}',file=out); print(f'mod_directory={namespace}-{name}',file=out); print(f'zip_name={name}-{version}.zip',file=out)
+
+          path = Path("manifest.json")
+          if not path.is_file():
+              raise SystemExit("manifest.json is missing")
+          data = json.loads(path.read_text(encoding="utf-8-sig"))
+          for key in ("name", "namespace", "version_number", "description"):
+              value = data.get(key)
+              if not isinstance(value, str) or not value.strip():
+                  raise SystemExit(f"Invalid manifest field: {key}")
+          for key in ("name", "namespace"):
+              value = data[key].strip()
+              if "/" in value or "\\" in value or value in {".", ".."}:
+                  raise SystemExit(f"Invalid manifest.{key}: {value!r}")
+
+          manifest_version = data["version_number"].strip()
+          release_version = os.environ["VERSION"].strip()
+          if manifest_version != release_version:
+              raise SystemExit(
+                  f"Manifest version mismatch: manifest.json has {manifest_version!r}, "
+                  f"but the release tag requests {release_version!r}. Update manifest.json "
+                  f"or use the matching v{manifest_version} tag."
+              )
+
+          name = data["name"].strip()
+          namespace = data["namespace"].strip()
+          print(f"Manifest: {namespace}/{name}")
+          print(f"Manifest version: {manifest_version}")
+          print(f"Release version: {release_version}")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print(f"name={name}", file=out)
+              print(f"namespace={namespace}", file=out)
+              print(f"mod_directory={namespace}-{name}", file=out)
+              print(f"zip_name={name}-{release_version}.zip", file=out)
           PY
 
       - name: Install Godot ${{ env.GODOT_VERSION }}
         shell: bash
         run: |
           set -euo pipefail
-          GODOT_DIR="$RUNNER_TEMP/godot"; mkdir -p "$GODOT_DIR"
-          curl --fail --show-error --location --retry 5 --retry-delay 2 --retry-all-errors "$GODOT_DOWNLOAD_URL" --output "$GODOT_DIR/godot.zip"
+          GODOT_DIR="$RUNNER_TEMP/godot"
+          mkdir -p "$GODOT_DIR"
+          curl --fail --show-error --location --retry 5 --retry-delay 2 --retry-all-errors \
+            "$GODOT_DOWNLOAD_URL" --output "$GODOT_DIR/godot.zip"
           unzip -q "$GODOT_DIR/godot.zip" -d "$GODOT_DIR"
           GODOT_BIN="$(find "$GODOT_DIR" -type f -name 'Godot_v3.7-dev1_linux_headless.64' -print -quit)"
-          if [[ -z "$GODOT_BIN" ]]; then echo "::error::Godot $GODOT_VERSION executable was not found."; find "$GODOT_DIR" -maxdepth 3 -type f -print >&2; exit 1; fi
-          chmod +x "$GODOT_BIN"; echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"; "$GODOT_BIN" --version
+          if [[ -z "$GODOT_BIN" ]]; then
+            echo "::error::Godot $GODOT_VERSION executable was not found."
+            find "$GODOT_DIR" -maxdepth 3 -type f -print >&2
+            exit 1
+          fi
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          "$GODOT_BIN" --version
 
       - name: Prepare isolated Godot project
         env:
@@ -90,9 +124,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PROJECT="$RUNNER_TEMP/mod-project"; MOD_ROOT="$PROJECT/mods-unpacked/$MOD_DIRECTORY"
-          rm -rf "$PROJECT"; mkdir -p "$MOD_ROOT"
-          rsync -a --exclude='.git/' --exclude='.github/' --exclude='.godot/' --exclude='.import/' --exclude='dist/' --exclude='ci/' --exclude='project.godot' --exclude='project.godot.*' --exclude='export_presets.cfg' --exclude='.DS_Store' --exclude='desktop.ini' --exclude='.gitignore' --exclude='.gitattributes' "$GITHUB_WORKSPACE/" "$MOD_ROOT/"
+          PROJECT="$RUNNER_TEMP/mod-project"
+          MOD_ROOT="$PROJECT/mods-unpacked/$MOD_DIRECTORY"
+          rm -rf "$PROJECT"
+          mkdir -p "$MOD_ROOT"
+          rsync -a \
+            --exclude='.git/' --exclude='.github/' --exclude='.godot/' --exclude='.import/' \
+            --exclude='dist/' --exclude='ci/' --exclude='project.godot' --exclude='project.godot.*' \
+            --exclude='export_presets.cfg' --exclude='.DS_Store' --exclude='desktop.ini' \
+            --exclude='.gitignore' --exclude='.gitattributes' \
+            "$GITHUB_WORKSPACE/" "$MOD_ROOT/"
           cat > "$PROJECT/project.godot" <<'GODOT'
           ; Temporary CI project used only to generate Godot 3 import data.
           config_version=4
@@ -103,41 +144,48 @@ jobs:
           window/size/width=1280
           window/size/height=720
           GODOT
-          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"; echo "MOD_ROOT=$MOD_ROOT" >> "$GITHUB_ENV"
-
-      - name: Set release version in package manifest
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          MANIFEST="$MOD_ROOT/manifest.json"; VERSION="$VERSION" MANIFEST="$MANIFEST" python3 <<'PY'
-          import json, os
-          from pathlib import Path
-          path=Path(os.environ['MANIFEST']); data=json.loads(path.read_text(encoding='utf-8-sig')); data['version_number']=os.environ['VERSION']; path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          PY
+          echo "PROJECT=$PROJECT" >> "$GITHUB_ENV"
+          echo "MOD_ROOT=$MOD_ROOT" >> "$GITHUB_ENV"
 
       - name: Import resources with Godot
         shell: bash
         run: |
           set -euo pipefail
-          LOG_FILE="$RUNNER_TEMP/godot-import.log"; IMPORT_DIR="$PROJECT/.import"; rm -rf "$IMPORT_DIR"
+          LOG_FILE="$RUNNER_TEMP/godot-import.log"
+          IMPORT_DIR="$PROJECT/.import"
+          rm -rf "$IMPORT_DIR"
           "$GODOT_BIN" --path "$PROJECT" --editor --headless --audio-driver Dummy >"$LOG_FILE" 2>&1 &
-          GODOT_PID=$!; cleanup(){ kill "$GODOT_PID" 2>/dev/null || true; wait "$GODOT_PID" 2>/dev/null || true; }; trap cleanup EXIT
-          DEADLINE=$((SECONDS + 180)); LAST_COUNT=-1; STABLE=0; IMPORT_FINISHED=0
+          GODOT_PID=$!
+          cleanup() { kill "$GODOT_PID" 2>/dev/null || true; wait "$GODOT_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+          DEADLINE=$((SECONDS + 180))
+          LAST_COUNT=-1
+          STABLE=0
+          IMPORT_FINISHED=0
           while (( SECONDS < DEADLINE )); do
-            if ! kill -0 "$GODOT_PID" 2>/dev/null; then echo "::error::Godot exited before import verification completed."; cat "$LOG_FILE" >&2 || true; exit 1; fi
+            if ! kill -0 "$GODOT_PID" 2>/dev/null; then
+              echo "::error::Godot exited before import verification completed."
+              cat "$LOG_FILE" >&2 || true
+              exit 1
+            fi
             if [[ -d "$IMPORT_DIR" ]]; then
               COUNT="$(find "$IMPORT_DIR" -type f ! -name '.gdignore' | wc -l)"
-              if (( COUNT == LAST_COUNT )); then STABLE=$((STABLE+1)); else LAST_COUNT="$COUNT"; STABLE=0; fi
+              if (( COUNT == LAST_COUNT )); then STABLE=$((STABLE + 1)); else LAST_COUNT="$COUNT"; STABLE=0; fi
               echo "Imported cache files: $COUNT; stable checks: $STABLE"
               if (( COUNT > 0 && STABLE >= 5 )); then IMPORT_FINISHED=1; break; fi
             fi
             sleep 1
           done
-          if (( IMPORT_FINISHED != 1 )); then echo "::error::Godot import did not reach a stable state within 180 seconds."; cat "$LOG_FILE" >&2 || true; exit 1; fi
-          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load resource|Cannot open file' "$LOG_FILE"; then echo "::error::Godot reported resource or script errors during import."; grep -Ein 'SCRIPT ERROR|Parse Error|Failed to load resource|Cannot open file' "$LOG_FILE" || true; exit 1; fi
-          IMPORT_COUNT="$(find "$IMPORT_DIR" -type f ! -name '.gdignore' | wc -l)"; echo "Final generated import cache files: $IMPORT_COUNT"
+          if (( IMPORT_FINISHED != 1 )); then
+            echo "::error::Godot import did not reach a stable state within 180 seconds."
+            cat "$LOG_FILE" >&2 || true
+            exit 1
+          fi
+          if grep -Eiq 'SCRIPT ERROR|Parse Error|Failed to load resource|Cannot open file' "$LOG_FILE"; then
+            echo "::error::Godot reported resource or script errors during import."
+            grep -Ein 'SCRIPT ERROR|Parse Error|Failed to load resource|Cannot open file' "$LOG_FILE" || true
+            exit 1
+          fi
 
       - name: Build ModLoader package
         env:
@@ -146,15 +194,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          STAGE="$RUNNER_TEMP/release-stage"; RELEASE="$RUNNER_TEMP/release"; ZIP="$RELEASE/$ZIP_NAME"
-          rm -rf "$STAGE" "$RELEASE"; mkdir -p "$STAGE/mods-unpacked/$MOD_DIRECTORY" "$RELEASE"
-          rsync -a --exclude='.git/' --exclude='.github/' --exclude='.godot/' --exclude='.import/' --exclude='project.godot' --exclude='project.godot.*' --exclude='export_presets.cfg' --exclude='.DS_Store' --exclude='desktop.ini' --exclude='.gitignore' --exclude='.gitattributes' "$MOD_ROOT/" "$STAGE/mods-unpacked/$MOD_DIRECTORY/"
+          STAGE="$RUNNER_TEMP/release-stage"
+          RELEASE="$RUNNER_TEMP/release"
+          ZIP="$RELEASE/$ZIP_NAME"
+          rm -rf "$STAGE" "$RELEASE"
+          mkdir -p "$STAGE/mods-unpacked/$MOD_DIRECTORY" "$RELEASE"
+          rsync -a \
+            --exclude='.git/' --exclude='.github/' --exclude='.godot/' --exclude='.import/' \
+            --exclude='project.godot' --exclude='project.godot.*' --exclude='export_presets.cfg' \
+            --exclude='.DS_Store' --exclude='desktop.ini' --exclude='.gitignore' --exclude='.gitattributes' \
+            "$MOD_ROOT/" "$STAGE/mods-unpacked/$MOD_DIRECTORY/"
           if [[ ! -d "$PROJECT/.import" ]]; then echo "::error::Godot did not generate the .import cache."; exit 1; fi
-          IMPORT_COUNT="$(find "$PROJECT/.import" -type f ! -name '.gdignore' | wc -l)"; if (( IMPORT_COUNT == 0 )); then echo "::error::Generated .import cache is empty."; exit 1; fi
-          mkdir -p "$STAGE/.import"; rsync -a --exclude='.gdignore' "$PROJECT/.import/" "$STAGE/.import/"
+          IMPORT_COUNT="$(find "$PROJECT/.import" -type f ! -name '.gdignore' | wc -l)"
+          if (( IMPORT_COUNT == 0 )); then echo "::error::Generated .import cache is empty."; exit 1; fi
+          mkdir -p "$STAGE/.import"
+          rsync -a --exclude='.gdignore' "$PROJECT/.import/" "$STAGE/.import/"
           find "$STAGE" -type f \( -name '.gdignore' -o -name '*.md5' -o -name '*.csv.import' \) -delete
           (cd "$STAGE" && zip -r -q -9 -n '.png:.webp:.jpg:.jpeg:.gif:.bmp:.ico:.dds:.stex:.ctex:.ogg:.oggstr:.mp3:.aac:.m4a:.mp4:.webm:.zip:.7z:.rar:.gz:.bz2:.xz:.zst' "$ZIP" .)
-          test -s "$ZIP"; sha256sum "$ZIP" > "$ZIP.sha256"; ls -lh "$ZIP" "$ZIP.sha256"
+          test -s "$ZIP"
+          sha256sum "$ZIP" > "$ZIP.sha256"
 
       - name: Verify release package
         env:
@@ -164,21 +222,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="$RUNNER_TEMP/release/$ZIP_NAME"; MANIFEST_PATH="mods-unpacked/$MOD_DIRECTORY/manifest.json"; unzip -t "$ZIP" >/dev/null
-          LISTING="$RUNNER_TEMP/zip-list.txt"; unzip -Z1 "$ZIP" > "$LISTING"
+          ZIP="$RUNNER_TEMP/release/$ZIP_NAME"
+          MANIFEST_PATH="mods-unpacked/$MOD_DIRECTORY/manifest.json"
+          unzip -t "$ZIP" >/dev/null
+          LISTING="$RUNNER_TEMP/zip-list.txt"
+          unzip -Z1 "$ZIP" > "$LISTING"
           if ! grep -Fxq "$MANIFEST_PATH" "$LISTING"; then echo "::error::manifest.json is missing from the expected ModLoader path."; exit 1; fi
           if grep -Eq '(^|/)(\.git|\.github|\.godot)(/|$)' "$LISTING"; then echo "::error::Development directories leaked into the release package."; exit 1; fi
           if grep -Eq '(^|/)(\.gdignore|.*\.md5|.*\.csv\.import)$' "$LISTING"; then echo "::error::Forbidden generated files leaked into the release package."; exit 1; fi
           if ! grep -Eq '^\.import/[^/]+$|^\.import/.+/.+$' "$LISTING"; then echo "::error::Generated .import cache is missing from the release package."; exit 1; fi
           unzip -p "$ZIP" "$MANIFEST_PATH" > "$RUNNER_TEMP/release-manifest.json"
           VERSION="$VERSION" MANIFEST="$RUNNER_TEMP/release-manifest.json" python3 <<'PY'
-          import json, os
+          import json
+          import os
           from pathlib import Path
-          expected=os.environ['VERSION']; actual=json.loads(Path(os.environ['MANIFEST']).read_text(encoding='utf-8'))['version_number']
-          if actual != expected: raise SystemExit(f'Release manifest version mismatch: {actual} != {expected}')
-          print(f'Manifest version verified: {actual}')
+          expected = os.environ["VERSION"]
+          manifest = json.loads(Path(os.environ["MANIFEST"]).read_text(encoding="utf-8"))
+          actual = manifest.get("version_number")
+          if actual != expected:
+              raise SystemExit(f"Release manifest version mismatch: {actual!r} != {expected!r}")
+          print(f"Manifest version verified: {actual}")
           PY
-          echo "ZIP structure verified successfully."; echo "File count: $(wc -l < "$LISTING")"
+          echo "ZIP structure verified successfully."
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v6
