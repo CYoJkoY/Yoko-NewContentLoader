@@ -1,40 +1,30 @@
 {
-	"name": "NewContentLoader",
-	"namespace": "Yoko",
-	"version_number": "1.0.0",
-	"description": "",
-	"website_url": "",
-	"dependencies": [
-
-	],
-	"extra": {
-		"godot": {
-			"authors": [
-
-			],
-			"optional_dependencies": [
-
-			],
-			"compatible_game_version": [
-
-			],
-			"compatible_mod_loader_version": [
-				"6.2.0"
-			],
-			"incompatibilities": [
-
-			],
-			"load_before": [
-
-			],
-			"tags": [
-
-			],
-			"config_schema": {
-
-			},
-			"description_rich": "",
-			"image": null
-		}
-	}
+  "name": "NewContentLoader",
+  "namespace": "Yoko",
+  "version_number": "1.1.0",
+  "description": "A shared Brotato content-registration framework for dependent mods to add structured game content and reusable runtime extensions.",
+  "website_url": "",
+  "dependencies": [],
+  "extra": {
+    "godot": {
+      "authors": [
+        "CYoJkoY"
+      ],
+      "optional_dependencies": [],
+      "compatible_game_version": [],
+      "compatible_mod_loader_version": [
+        "6.3.0"
+      ],
+      "incompatibilities": [],
+      "load_before": [],
+      "tags": [
+        "framework",
+        "content-loader",
+        "infrastructure"
+      ],
+      "config_schema": {},
+      "description_rich": "A shared Brotato content-registration framework for dependent mods to add structured game content and reusable runtime extensions.",
+      "image": null
+    }
+  }
 }
