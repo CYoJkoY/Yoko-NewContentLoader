@@ -1,1665 +1,1259 @@
-# Yoko-NewContentLoader 使用与开发文档
+# Yoko-NewContentLoader 使用与开发手册
 
-> 面向 Brotato Mod 开发者的完整操作手册。
+> 面向 Brotato Mod 开发者、Godot 3.x 开发者，以及希望基于 NCL 构建内容型 Mod 的开发者。
 >
-> 本文以仓库当前 `1.1.0` 实现为准，兼容目标为 Brotato `1.15.4`、Brotato Mod Loader `6.3.0`。如果你的代码与本文示例存在差异，请优先以当前仓库源码与 `manifest.json` 为准。
+> **当前基准：NCL 1.1.0 · Brotato 1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
+>
+> 本文不是单纯的 API 列表。它同时解释 Godot `Resource` / `.tres`、Inspector、脚本继承、Mod Loader Script Extension，以及 NCL 如何把内容接入 Brotato 原生服务。具体 API 行为以当前仓库源码为最终依据。
 
-## 先看这里：5 分钟接入一个 Mod
+<div align="center">
 
-Yoko-NewContentLoader（以下简称 **NCL**）不是一个独立玩法 Mod，而是一层共享基础设施：其他 Mod 通过 `NewContent` 资源声明内容，NCL 负责发现、合并、注册、卸载，并把这些资源接入 Brotato 原有服务。
+### 📖 English version
 
-最小接入路径只有 4 步：
+[Read the English developer guide →](USAGE.en.md)
+
+</div>
+
+## 1. 先理解 NCL：它到底解决什么问题
+
+`Yoko-NewContentLoader` 不是独立玩法 Mod，也不是只负责把几个 `.tres` 文件读取进内存的普通文件加载器。它是一个**共享内容基础设施层**：依赖 NCL 的 Mod 使用 Godot `Resource` 描述内容，NCL 负责发现这些 Mod、读取内容资源、处理 DLC 内容、合并资源、注册到 Brotato 原有服务、提供卸载流程，并提供一组可以被不同 Mod 复用的运行时扩展与工具。
+
+核心路径：
 
 ```text
-1. manifest.json 声明依赖 Yoko-NewContentLoader
-                 ↓
-2. 创建 NewContentData.tres
-                 ↓
-3. 把角色 / 武器 / 道具 / 敌人 / 翻译等资源填入对应字段
-                 ↓
-4. 启动游戏，由 NCL 自动发现并加载
+Godot Editor
+    │
+    │ Resource / .tres
+    ▼
+Your Mod
+    │
+    ├── manifest.json
+    ├── NewContentData.tres
+    ├── NewContentDataDLC1.tres   (可选)
+    ├── content/**/*.tres
+    ├── translations/*.translation
+    └── extensions/*.gd
+    │
+    ▼
+Yoko-NewContentLoader
+    │
+    ├── 自动发现依赖 Mod
+    ├── 基础内容加载
+    ├── DLC 内容检测与合并
+    ├── Resource 注册 / 卸载
+    ├── Global Class 发现与清理
+    ├── Brotato Script Extension
+    └── Runtime helper API
+    │
+    ▼
+Brotato 原生服务
+    │
+    ├── ItemService
+    ├── ZoneService
+    ├── ChallengeService
+    ├── RunData
+    ├── ProgressData
+    ├── WeaponService
+    ├── Main
+    ├── EffectBehaviorService
+    └── TranslationServer / Text
 ```
 
-### 最小 manifest
+### 为什么采用这个边界？
+
+Brotato 本身已经存在角色、武器、物品、效果、区域、挑战、DLC、RunData、ProgressData 等运行时结构。NCL 不再复制一套平行数据库，而是在这些已有边界之上提供统一的 Mod 接入层。
+
+这套设计的三个直接收益是：
+
+1. **Godot Resource 原生工作流。** Resource 可以在 Inspector 中编辑并保存为 `.tres`；Godot 支持 Resource 递归引用、自动序列化和版本控制友好的文本 Resource。citeturn479829search2turn479829search5
+2. **沿用游戏自己的数据边界。** 内容最终还是进入 Brotato 的 ItemService、ZoneService、RunData 等系统，不需要另造一份平行数据结构。
+3. **基础能力集中复用。** 多个 Mod 可以共享 NCL 的发现、注册、卸载、DLC 分层、tracking、Hook 和工具函数。
+
+> **兼容性边界：** NCL 沿用游戏已有 DLC、ProgressData 和 Service 边界，通常比每个 Mod 自己实现注册体系更容易维护；但这并不意味着跨任意 Brotato 版本或任意 Mod 组合绝对兼容。底层 API 变化、资源 ID 冲突以及多个 Mod 同时修改同一运行时服务仍可能造成冲突。
+
+---
+
+## 2. 五分钟接入一个新 Mod
+
+这是普通内容 Mod 最推荐的接入方式。
+
+### 2.1 声明依赖
+
+在 `manifest.json` 添加：
 
 ```json
 {
   "name": "MyMod",
   "namespace": "MyNamespace",
   "version_number": "1.0.0",
+  "description": "My Brotato content mod",
   "dependencies": [
     "Yoko-NewContentLoader"
   ]
 }
 ```
 
-### 最小 NewContentData.tres
+NCL 会遍历 Mod Loader 发现的 Mod，并只对 manifest 明确声明依赖 NCL 的项目做内容发现。当前源码通过 `mod_data.manifest.dependencies` 检查这一点。fileciteturn39file0
+
+### 2.2 准备 Godot Resource
+
+推荐：
 
 ```text
-[gd_resource type="Resource" load_steps=2 format=2]
-
-[ext_resource path="res://mods-unpacked/Yoko-NewContentLoader/NewContent.gd" type="Script" id=1]
-
-[resource]
-script = ExtResource( 1 )
-my_id = "MyMod"
-characters = [ ... ]
-weapons = [ ... ]
-items = [ ... ]
-translations = [ ... ]
+MyMod/
+├── manifest.json
+├── NewContentData.tres
+├── content/
+│   ├── characters/
+│   ├── weapons/
+│   ├── items/
+│   ├── effects/
+│   ├── entities/
+│   ├── maps/
+│   └── zones/
+├── translations/
+└── extensions/
 ```
 
-正常情况下，**不需要在你的 Mod 里手动调用 `add_resources()`**。NCL 会扫描所有声明依赖自己的 Mod，读取 `NewContentData.tres`，再自动把内容接入游戏。
+目录名可以按你的项目习惯调整；真正重要的是 Resource 能被 `NewContentData.tres` 正确引用。
 
----
+Godot 3.x 中的 `export(Array, Resource)` 会让数组暴露在 Inspector 中，因此你可以把 `.tres` 资源直接拖入数组字段。citeturn479829search6
 
-## 1. NCL 到底在做什么
+### 2.3 从 `NewContent.tres` 开始
 
-Brotato 原本已经拥有自己的内容系统：角色、武器、物品、效果、敌人、挑战、区域、翻译等最终都由游戏内部服务管理。NCL 的目标不是再造一个平行的内容框架，而是在这些现有服务上增加一个稳定的 Mod 内容入口。
+NCL 仓库提供 `NewContent.tres` 作为模板。当前模板使用 `NewContent.gd`，并已经序列化了各种内容数组字段。fileciteturn46file0
 
-核心模型是：
-
-```text
-                    Brotato 原生系统
-             ┌─────────┬─────────┬─────────┐
-             │ItemService│ZoneService│RunData│ ...
-             └─────────┴─────────┴─────────┘
-                       ▲
-                       │
-                NCL 注册 / 卸载层
-                       ▲
-                       │
-                 NewContent 数据
-                       ▲
-             ┌─────────┴─────────┐
-             │                   │
-        NewContentData.tres  NewContentDataDLC1.tres
-             │                   │
-             └─────────┬─────────┘
-                       │
-                 你的 Mod 资源
-```
-
-这也是 NCL 的主要价值：Mod 开发者主要描述“**我增加了什么**”，而不是反复实现“**怎样把它塞进每一个 Brotato 服务里**”。
-
----
-
-## 2. 为什么使用 Brotato 自己的 DLC / Progress 系统
-
-NCL 当前的内容发现入口位于 Brotato 的 `ProgressData` 扩展中。它遍历 Mod Loader 已加载的 Mod，只处理 manifest 中声明依赖 `Yoko-NewContentLoader` 的 Mod，然后把每个 Mod 的内容资源组织成一份 DLC 数据并加入游戏现有的可用 DLC 容器。
-
-当前实现同时支持两层内容：
+推荐复制为：
 
 ```text
 NewContentData.tres
-        │
-        ├── 基础内容
-        │
-        └──────────────┐
-                       ▼
-NewContentDataDLC1.tres
-        │
-        ├── DLC1 内容
-        │
-        └──────────────┐
-                       ▼
-               自动合并为一份内容
-                       │
-                       ▼
-                available_dlcs
 ```
 
-DLC1 的识别使用游戏现有的 DLC ID：
+然后在 Godot Inspector 里编辑。
+
+### 2.4 在 Inspector 里拖入资源
+
+例如：
 
 ```text
-abyssal_terrors
+content/characters/demo_character_data.tres
+content/weapons/demo_weapon_data.tres
+content/items/demo_item_data.tres
 ```
 
-只有在游戏当前确实提供对应 DLC 数据时，NCL 才会继续读取依赖 Mod 的 `NewContentDataDLC1.tres`。
+Inspector：
 
-### 为什么这种方式有利于兼容性
+```text
+NewContentData.tres
+  Characters  → demo_character_data.tres
+  Weapons     → demo_weapon_data.tres
+  Items       → demo_item_data.tres
+```
 
-这里需要区分“架构优势”和“绝对兼容保证”。使用原生 DLC / ProgressData 边界意味着：
+这就是 NCL 最核心的使用方式。
 
-1. 内容最终仍然进入 Brotato 已经理解的服务和数据结构，而不是另建一个平行的 Mod 数据库。
-2. Mod 的内容可以复用游戏自己的物品池、武器查找、区域、挑战、RunData、翻译和其他生命周期。
-3. NCL 只扩展少数明确的服务边界，因此不同内容 Mod 更容易共享同一套注册逻辑。
-4. DLC 内容只有在游戏对应 DLC 可用时才进入加载路径，天然具备一个明确的兼容性边界。
-5. 基础内容与 DLC1 内容可以分别维护，再由 NCL 自动合并。
+### 2.5 通常不要手动调用 `add_resources()`
 
-这并不意味着“使用 NCL 就一定不会发生 Mod 冲突”。如果两个 Mod 使用相同 `my_id`、相互修改相同底层服务、或假设完全不同的游戏版本，仍然可能产生兼容性问题。
+普通依赖 Mod 不应该在自己的初始化代码里反复执行：
+
+```gdscript
+content.add_resources()
+```
+
+NCL 的推荐模式是：
+
+```text
+manifest dependency
+        ↓
+NCL discovery
+        ↓
+load NewContentData.tres
+        ↓
+merge if necessary
+        ↓
+register into Brotato services
+```
+
+`ProgressData` 扩展会自动发现依赖 NCL 的 Mod 并读取内容资源。fileciteturn39file0
+
+手动调用 `add_resources()` 更适合你需要完全自定义生命周期的高级场景，而不是标准内容 Mod。
 
 ---
 
-## 3. 安装 NCL
+## 3. Godot Resource：为什么 NCL 选择 `.tres`
 
-### 玩家安装
+如果第一次使用 NCL，首先要理解 Godot 的 `Resource`。
 
-1. 安装 Brotato `1.15.4`。
-2. 安装 Brotato Mod Loader `6.3.0`。
-3. 从 NCL Releases 下载对应的 `NewContentLoader-*.zip`。
-4. 把 ZIP 放入 Mod Loader 的 `mods` 目录。
-5. 再安装声明依赖 NCL 的内容 Mod。
+### 3.1 Node 与 Resource
 
-正常安装结构为：
+可以先这样理解：
 
 ```text
-mods/
-├── NewContentLoader-*.zip
-├── MyMod-*.zip
-└── OtherMod-*.zip
+Node
+→ 场景中的实例 / 行为载体
+
+Resource
+→ 可保存、可复用的数据对象
 ```
 
-### 开发环境
+Godot 官方把 Resource 定义为数据容器；纹理、脚本、动画、翻译、场景等都是 Resource，开发者也可以自己写 `extends Resource` 的脚本并保存为 `.tres`。citeturn479829search2
 
-开发时推荐使用 `mods-unpacked`：
+NCL 因此天然适合这种结构：
 
 ```text
-mods-unpacked/
-├── Yoko-NewContentLoader/
-└── MyMod/
+CharacterData.tres
+WeaponData.tres
+ItemData.tres
+EffectData.tres
+ZoneData.tres
+Translation
+       ↓
+NewContentData.tres
+       ↓
+NCL
 ```
 
-NCL 的源码目录结构通常为：
+### 3.2 为什么不直接使用 JSON
+
+因为 Brotato 内容并不是只有数字和字符串，大量字段会引用其他 Godot Resource：
 
 ```text
-Yoko-NewContentLoader/
-├── NewContent.gd
-├── NewContent.tres
-├── extensions/
-├── manifest.json
-└── mod_main.gd
+WeaponData
+ ├── icon      → Texture
+ ├── effects   → Effect Resource[]
+ ├── stats     → WeaponStats Resource
+ ├── scene     → PackedScene
+ └── ...
 ```
 
-### 依赖声明是关键
+Godot Resource 可以递归保存子 Resource，Inspector 也可以直接编辑资源引用。citeturn479829search2
 
-NCL 通过：
+JSON 更适合交换数据；`.tres` 更适合描述 Godot 游戏内部资源图。
 
-```gdscript
-mod_data.manifest.dependencies.has("Yoko-NewContentLoader")
+### 3.3 为什么 `.tres` 很适合 Git
+
+`.tres` 是文本 Resource 序列化格式，适合 Git diff；同时 Godot Editor 可以直接从 FileSystem Dock 打开并通过 Inspector 修改。citeturn479829search2
+
+大型 Mod 推荐：
+
+```text
+一个角色 = 一个 CharacterData.tres
+一个武器 = 一个 WeaponData.tres
+一个道具 = 一个 ItemData.tres
+一个效果 = 一个 EffectData.tres
 ```
 
-来判断一个 Mod 是否应该进入内容加载流程。
-
-因此你的 Mod 即使拥有正确的 `NewContentData.tres`，**只要没有在 manifest 中声明 NCL 依赖，NCL 就不会主动加载它。**
+再用 `NewContentData.tres` 做聚合，而不是维护一个巨型脚本。
 
 ---
 
-# 4. NewContent：所有内容的统一入口
+# 4. NewContent 全字段
 
-`NewContent.gd` 继承自 Godot `Resource`。你的 Mod 应该通过继承这一资源模板的 `.tres` 文件来描述需要注册的内容。
+下面按照当前 `NewContent.gd` 的实际字段说明。
 
-完整字段可以按用途分为 7 组。
-
-## 4.1 基础字段
-
-### `my_id`
-
-每一份 `NewContent` 都应该有唯一标识。
+## 4.1 `my_id`
 
 ```gdscript
-my_id = "MyMod"
+export(String) var my_id
 ```
 
-NCL 会根据 `my_id` 生成内部哈希，并把它作为这份内容的稳定标识。
+标识一整个内容集合。NCL 会据此生成 `my_id_hash`。
 
-建议：
+建议直接使用 Mod namespace：
 
 ```text
-项目名 / Mod 内部唯一 ID
+YzTato
+Fantasy
+MyExpansion
 ```
 
-避免：
+不要让不同逻辑集合长期共用同一 ID。
+
+## 4.2 `groups_in_all_zones`
+
+```gdscript
+export(Array, Resource) var groups_in_all_zones = []
+```
+
+用于把指定组资源注入所有相关 Zone 数据。
+
+典型用途包括全局敌人组、内容组以及需要在所有区域可用的特殊分组。
+
+## 4.3 `music_tracks`
+
+```gdscript
+export(Array, Resource) var music_tracks = []
+```
+
+注册音乐相关 Resource。音频文件本身仍由 Godot 导入系统管理，NCL 只负责把对应 Resource 交给游戏内容系统。
+
+推荐：
 
 ```text
-test
-new
-mod
-content
+content/music/
+├── battle_01.ogg
+└── shop_01.ogg
 ```
 
-因为内容合并、日志和扩展之间都依赖明确的身份边界。
-
----
-
-# 5. 游戏内容资源字段
-
-## 5.1 `backgrounds`
-
-向 Brotato 的背景资源集合添加内容。
+## 4.4 `backgrounds`
 
 ```gdscript
-backgrounds = [
-    preload("res://mods-unpacked/MyMod/content/maps/my_background.tres")
-]
+export(Array, Resource) var backgrounds = []
 ```
 
-NCL 会：
+注册背景，并在添加阶段把背景注入现有 Zone 的 `default_backgrounds`；卸载时反向移除。fileciteturn34file0
 
-1. 调用 `ItemService.add_backgrounds()`。
-2. 把这些背景加入当前 Zone 的 `default_backgrounds`。
-3. 在卸载时反向移除。
+因此不需要给每个 Zone 手写一遍背景注入逻辑。
 
-因此，如果你的 Mod 新增一个地图背景，并希望相关 Zone 自动可以使用它，这个字段是标准入口。
-
-## 5.2 `characters`
-
-添加新的角色资源：
+## 4.5 `characters`
 
 ```gdscript
-characters = [
-    preload("res://mods-unpacked/MyMod/content/characters/example.tres")
-]
+export(Array, Resource) var characters = []
 ```
 
-内容加载后，角色进入 `ItemService.characters`，因此普通的 Brotato 角色查询与后续流程都可以继续使用这些对象。
-
-## 5.3 `entities`
-
-注册普通实体。
-
-常用于：
-
-- 特殊敌人
-- 特殊中立单位
-- Mod 自定义实体
-- 其他由 Brotato Entity 数据模型表达的内容
-
-## 5.4 `elites`
-
-添加 Elite 实体。
-
-## 5.5 `bosses`
-
-添加 Boss 实体。
-
-## 5.6 `stats`
-
-注册新的 Stat 定义。
-
-注意：NCL 会在内容全部加入后重新生成统计数据哈希，并调用 `Utils.reset_stat_keys()`，所以 Mod 不应该自己重复维护这些底层注册动作。
-
-## 5.7 `items`
-
-添加普通 Item：
+最终加入：
 
 ```gdscript
-items = [
-    preload("res://mods-unpacked/MyMod/content/items/example/example_data.tres")
-]
+ItemService.characters
 ```
 
-加载后会进入 `ItemService.items`。
+正确思路：
 
-适用范围包括：
+```text
+CharacterData.tres
+        ↓
+NewContentData.tres / characters
+        ↓
+NCL
+        ↓
+ItemService.characters
+```
 
-- 被动道具
-- 商店道具
-- 修改玩家属性的道具
-- 触发 Effect 的道具
-- 与其他 Mod 系统组合的道具
+NCL 不重新定义角色系统；角色 Resource 仍然遵循 Brotato 自己的角色数据结构。
 
-## 5.8 `weapons`
-
-添加武器资源：
+## 4.6 `entities`
 
 ```gdscript
-weapons = [
-    preload("res://mods-unpacked/MyMod/content/weapons/example.tres")
-]
+export(Array, Resource) var entities = []
 ```
 
-NCL 除了把武器加入 `ItemService.weapons` 外，还会额外建立 `my_id_hash → WeaponData` 的快速索引。
+注册普通 Entity Resource，例如宠物、炮台、特殊实体和地图实体。
 
-之后可以直接使用：
+## 4.7 `elites` / `bosses`
 
 ```gdscript
-ItemService.ncl_get_weapon_from_id(weapon_my_id_hash)
+export(Array, Resource) var elites = []
+export(Array, Resource) var bosses = []
 ```
 
-获得武器。
+注册 Elite 与 Boss。
 
-## 5.9 `effects`
+复杂运行时行为应放进相应脚本，而不是把所有逻辑塞进 `NewContent.gd`。
 
-添加 Effect 定义。
-
-这是扩展复杂玩法时最常使用的字段之一。Effect 仍然由 Brotato 原有的 Effect / Item / Weapon 体系消费，NCL 负责的是注册和生命周期，而不是替你发明新的 Effect 数据模型。
-
-## 5.10 `consumables`
-
-添加 Consumable。
-
-NCL 同时扩展了 `ItemService.get_consumable_to_drop()`，因此依赖 NCL 的 DLC / Mod 可以通过 `ncl_update_consumable_to_get()` 改写最终掉落的 Consumable。
-
-## 5.11 `upgrades`
-
-添加升级项。
-
-## 5.12 `sets`
-
-添加物品 / 武器 Set。
-
-## 5.13 `difficulties`
-
-添加新的 Difficulty。
-
-## 5.14 `icons`
-
-注册游戏 UI 使用的图标资源。
-
-这对自定义 Effect、伤害数字、状态描述以及其他 UI 数据尤其有用。
-
-## 5.15 `title_screen_backgrounds`
-
-向标题界面背景集合加入资源。
-
-## 5.16 `groups_in_all_zones`
-
-添加会出现在所有 Zone 的内容组。
-
-用于希望跨地图始终存在的内容分组。
-
-## 5.17 `music_tracks`
-
-注册新的音乐资源。
-
----
-
-# 6. Zone 与 Challenge
-
-## 6.1 `zones`
-
-注册新的 Zone：
+## 4.8 `stats`
 
 ```gdscript
-zones = [
-    preload("res://mods-unpacked/MyMod/content/zones/example.tres")
-]
+export(Array, Resource) var stats = []
 ```
 
-NCL 会将它加入：
+注册额外 Stat Resource。
+
+注册后 NCL 会重新生成 stat hash，并执行 `Utils.reset_stat_keys()`。fileciteturn34file0
+
+因此不要再为同一个 Stat 系统维护第二套初始化逻辑。
+
+## 4.9 `items`
+
+```gdscript
+export(Array, Resource) var items = []
+```
+
+注册 Item Resource。
+
+推荐：
+
+```text
+content/items/my_item/
+├── my_item_data.tres
+└── icon.png
+```
+
+由 `.tres` 引用图标等 Resource。
+
+## 4.10 `weapons`
+
+```gdscript
+export(Array, Resource) var weapons = []
+```
+
+注册 Weapon Resource，同时 NCL 建立基于 `my_id_hash` 的 Weapon lookup。fileciteturn38file0
+
+### Starting Weapon
+
+如果 WeaponData 设置了 `add_to_chars_as_starting`，NCL 会自动将该武器添加到对应角色的 `starting_weapons`，并避免重复；卸载时会反向移除。fileciteturn34file0
+
+## 4.11 `effects`
+
+```gdscript
+export(Array, Resource) var effects = []
+```
+
+注册 Effect Resource。
+
+需要动态行为时配合 Effect Behavior 使用。
+
+## 4.12 `consumables`
+
+```gdscript
+export(Array, Resource) var consumables = []
+```
+
+注册 Consumable。
+
+此外，NCL 扩展 `ItemService.get_consumable_to_drop()`，允许启用的 DLC 数据通过 `ncl_update_consumable_to_get()` 进一步改变掉落结果。fileciteturn38file0
+
+## 4.13 `upgrades`
+
+注册升级 Resource。建议 Resource 自身描述升级文本 Key、图标、效果与数值，NCL 只负责注册。
+
+## 4.14 `sets`
+
+注册 Set Resource。复杂套装逻辑不要硬编码到 NCL。
+
+## 4.15 `difficulties`
+
+注册 Difficulty Resource，可用于新难度或 Mod 专属难度。
+
+## 4.16 `icons`
+
+注册游戏内部 Icon Resource。注册后的 Icon 也可以被 NCL 自定义伤害飘字系统引用。
+
+## 4.17 `title_screen_backgrounds`
+
+注册标题画面背景 Resource。
+
+## 4.18 `translations`
+
+```gdscript
+export(Array, Translation) var translations
+```
+
+这里是强类型 `Translation` 数组，而不是通用 `Resource`。
+
+NCL 加载时调用：
+
+```gdscript
+TranslationServer.add_translation(translation)
+```
+
+卸载时调用对应的 `remove_translation()`。fileciteturn34file0
+
+推荐：
+
+```text
+translations/
+├── MyMod.en.translation
+├── MyMod.zh.translation
+└── MyMod.ja.translation
+```
+
+然后把它们拖进 `translations`。
+
+## 4.19 `challenges`
+
+注册 Challenge，并刷新 stat challenge 数据：
+
+```gdscript
+ChallengeService.challenges
+ChallengeService.set_stat_challenges()
+```
+
+卸载时 NCL 会反向清理。fileciteturn34file0
+
+## 4.20 `zones`
+
+注册 Zone 到：
 
 ```gdscript
 ZoneService.zones
 ```
 
-如果同时存在 `backgrounds`，NCL 还会把新增背景写入各 Zone 的默认背景集合。
+因此新地图仍然是 Brotato 自己的 Zone 数据，NCL 只是统一处理生命周期。
 
-## 6.2 `challenges`
+---
 
-注册挑战：
+# 5. Tracking：`tracked_items` 与 `tracked_effects`
+
+NCL 不只是注册“静态内容”，还可以把运行过程中的统计项接到 Brotato 的 RunData 生命周期。
+
+## 5.1 `tracked_items`
 
 ```gdscript
-challenges = [
-    preload("res://mods-unpacked/MyMod/content/challenges/example.tres")
-]
+export(Dictionary) var tracked_items = {}
 ```
 
-注册后 NCL 会刷新 ChallengeService 的统计挑战映射。
+加载时会转换成 hash dictionary 并合并到 `RunData.init_tracked_items`。
 
-卸载时会同时移除：
+推荐理解：
 
 ```text
-ChallengeService.challenges
-ChallengeService.stat_challenges
+NewContentData
+    ↓
+tracking schema
+    ↓
+RunData initialization
+    ↓
+运行时计数
 ```
 
-因此挑战数据不会因为 Mod 被移除而永久残留在当前运行时注册表中。
+## 5.2 `tracked_effects`
+
+```gdscript
+export(Dictionary) var tracked_effects = {}
+```
+
+NCL 将其转成 hash 后加入 `RunData.ncl_init_tracked_effects`；RunData 扩展会为四个玩家槽位建立 tracking state。fileciteturn40file0
+
+运行时：
+
+```gdscript
+RunData.ncl_add_effect_tracking_value(key_hash, value, player_index)
+RunData.ncl_set_effect_tracking_value(key_hash, value, player_index)
+RunData.ncl_get_effect_tracking_value(key_hash, player_index)
+```
+
+如果对应 value 是 Array，可以使用额外的 `index` 参数操作具体元素。fileciteturn40file0
+
+推荐把跨 Wave、跨菜单以及需要随 Run 状态恢复的统计放这里，而不是另建一个永不保存的全局 Dictionary。
 
 ---
 
-# 7. Localization：翻译与特殊文本格式
-
-## 7.1 `translations`
-
-可以直接注册 Godot `Translation` 资源：
+# 6. `primary_stats_list`
 
 ```gdscript
-translations = [
-    preload("res://mods-unpacked/MyMod/translations/MyMod.zh.translation"),
-    preload("res://mods-unpacked/MyMod/translations/MyMod.en.translation")
-]
+export(Array, String) var primary_stats_list = []
 ```
 
-NCL 会调用：
-
-```gdscript
-TranslationServer.add_translation()
-```
-
-卸载时再调用：
-
-```gdscript
-TranslationServer.remove_translation()
-```
-
-因此推荐把完整语言资源直接放入 `translations`，而不是通过自定义初始化函数手动注册。
-
-## 7.2 `translation_keys_needing_operator`
-
-用于告诉游戏某些翻译键需要运算符格式化。
-
-例如某文本需要显示：
-
-```text
-+10
--20%
-```
-
-可以把相应键映射交给 NCL：
-
-```gdscript
-translation_keys_needing_operator = {
-    "MY_STAT_DESCRIPTION": true
-}
-```
-
-NCL 会合并到：
-
-```gdscript
-Text.keys_needing_operator
-```
-
-## 7.3 `translation_keys_needing_percent`
-
-用于需要百分号格式化的翻译键。
-
-```gdscript
-translation_keys_needing_percent = {
-    "MY_PERCENT_STAT": true
-}
-```
-
-NCL 会把它们合并到：
-
-```gdscript
-Text.keys_needing_percent
-```
-
-卸载时会撤销对应注册。
-
----
-
-# 8. RunData 数据追踪功能
-
-NCL 对 `RunData` 做了较深的扩展。这些字段适合“玩法统计”和“运行过程中持续积累的数据”。
-
-## 8.1 `tracked_items`
-
-声明需要被持续追踪的 Item 数据。
-
-```gdscript
-tracked_items = {
-    "my_item_key": 0
-}
-```
-
-NCL 会把 Dictionary 转换成游戏内部哈希格式，并合并进：
-
-```gdscript
-RunData.init_tracked_items
-```
-
-适合：
-
-- 某类道具收集次数
-- 某个内容系统累计次数
-- 与已有 RunData 统计机制整合的数据
-
-## 8.2 `tracked_effects`
-
-与 `tracked_items` 类似，但用于 Effect：
-
-```gdscript
-tracked_effects = {
-    "my_effect_key": 0
-}
-```
-
-它会进入 NCL 扩展的：
-
-```gdscript
-RunData.ncl_init_tracked_effects
-```
-
-运行时提供：
-
-```gdscript
-RunData.ncl_add_effect_tracking_value()
-RunData.ncl_set_effect_tracking_value()
-RunData.ncl_get_effect_tracking_value()
-```
-
-### 增加值
-
-```gdscript
-RunData.ncl_add_effect_tracking_value(
-    Keys.my_effect_key_hash,
-    1,
-    player_index
-)
-```
-
-### 设置值
-
-```gdscript
-RunData.ncl_set_effect_tracking_value(
-    Keys.my_effect_key_hash,
-    10,
-    player_index
-)
-```
-
-### 读取值
-
-```gdscript
-var value = RunData.ncl_get_effect_tracking_value(
-    Keys.my_effect_key_hash,
-    player_index
-)
-```
-
-如果某个追踪键不存在，NCL 会写日志并返回 `0`，而不会静默创建一个拼写错误的键。
-
-## 8.3 数组型追踪值
-
-`ncl_*_effect_tracking_value()` 也支持追踪值本身为 Array 的情况：
-
-```text
-tracking_key → [value_0, value_1, value_2]
-```
-
-这时通过：
-
-```gdscript
-index = 0
-```
-
-选择要读写的槽位。
-
----
-
-# 9. 自定义 Primary Stats
-
-`primary_stats_list` 用于扩展游戏对 Primary Stat 的认知：
-
-```gdscript
-primary_stats_list = [
-    "MY_CUSTOM_STAT"
-]
-```
-
-NCL 会转换成哈希后追加到：
-
-```gdscript
-RunData.primary_stats_list
-```
-
-这适合：
-
-- 自定义角色属性
-- 新增真正意义上的主要属性
-- 需要被 UI / 统计逻辑作为 Primary Stat 处理的自定义键
-
-与其直接修改 Brotato 原始 `RunData`，推荐让 NCL 统一注册。
-
----
-
-# 10. Weapon / Effect Serialization 扩展
-
-NCL 暴露两组额外的序列化键列表：
-
-```gdscript
-effect_keys_full_serialization = [
-    "MY_EFFECT_KEY"
-]
-```
-
-以及：
-
-```gdscript
-effect_keys_with_weapon_stats = [
-    "MY_WEAPON_EFFECT_KEY"
-]
-```
-
-它们分别进入：
-
-```gdscript
-RunData.effect_keys_full_serialization
-RunData.effect_keys_with_weapon_stats
-```
-
-### 什么时候使用
-
-当你的自定义 Effect 包含额外运行状态，而标准 Effect 序列化逻辑无法自动覆盖时，就应该考虑将对应键加入这些列表。
+用于向 `RunData.primary_stats_list` 注册额外主要 Stat Key。
 
 例如：
 
 ```text
-Effect
- ├── base values
- ├── custom runtime state
- └── weapon-related values
+my_custom_stat
+my_other_stat
 ```
 
-此时把键登记到对应序列化集合，可以使存档 / RunData 的处理知道这些 Effect 需要额外保留。
+NCL 会把这些 String 转换成 hash 后追加到运行时列表。fileciteturn34file0
+
+适合自定义职业、角色或 UI 中需要把某 Stat 作为“主要属性”的项目。
 
 ---
 
-# 11. Effect Behavior 三种注册入口
-
-`NewContent` 支持三种行为资源：
+# 7. Effect Serialization Keys
 
 ```gdscript
-scene_effect_behaviors = []
-enemy_effect_behaviors = []
-player_effect_behaviors = []
+export(Array, String) var effect_keys_full_serialization = []
+export(Array, String) var effect_keys_with_weapon_stats = []
 ```
 
-## 11.1 `scene_effect_behaviors`
+当一个自定义 Effect 的数据需要参与 Brotato 对应的保存/恢复结构时，应把对应 key 统一登记在 NCL 的序列化列表里。
 
-适合场景级 Effect 行为。
-
-## 11.2 `enemy_effect_behaviors`
-
-适合敌人身上的 Effect 行为。
-
-## 11.3 `player_effect_behaviors`
-
-适合玩家身上的 Effect 行为。
-
-三者最终都会注册到：
-
-```gdscript
-EffectBehaviorService
-```
-
-卸载时 NCL 会把对应资源移除。
-
-### 典型使用方式
+思路是：
 
 ```text
-Item / Weapon / Effect Data
-            │
-            ▼
-     EffectBehavior
-            │
-    ┌───────┼────────┐
-    ▼       ▼        ▼
-  Scene   Enemy    Player
+自定义 Effect
+    ↓
+Effect 有需要保存的自定义 key
+    ↓
+在 NewContentData 中登记
+    ↓
+RunData 序列化逻辑知道它
 ```
 
-这允许 Mod 将“数据定义”和“需要主动运行的行为”分开。
+不要把相同 key 的处理散落在多个 Mod 脚本中。
 
 ---
 
-# 12. Starting Weapon 自动注册
-
-这是 `NewContent` 中一个很实用、也容易被忽略的功能。
-
-如果 WeaponData 中定义：
+# 8. 文本处理：operator / percent
 
 ```gdscript
-add_to_chars_as_starting = [
-    "my_character_id"
+export(Dictionary) var translation_keys_needing_operator = {}
+export(Dictionary) var translation_keys_needing_percent = {}
+```
+
+加载时合并到：
+
+```gdscript
+Text.keys_needing_operator
+Text.keys_needing_percent
+```
+
+卸载时反向清理。fileciteturn34file0
+
+如果你的描述文本包含复杂运算符、百分比或动态统计，不要先在每个 Item/Effect 中硬拼字符串；先检查 Brotato 的 Text 体系能否通过这些注册表表达。
+
+---
+
+# 9. Effect Behavior：Data 与 Behavior 分离
+
+三个字段：
+
+```gdscript
+export(Array, Resource) var scene_effect_behaviors = []
+export(Array, Resource) var enemy_effect_behaviors = []
+export(Array, Resource) var player_effect_behaviors = []
+```
+
+NCL 的设计是：
+
+```text
+Resource = 描述“是什么”
+Behavior = 描述“运行时怎么做”
+```
+
+加载时加入 `EffectBehaviorService`，卸载时移除。fileciteturn34file0
+
+这意味着一个复杂 Effect 可以拆成：
+
+```text
+MyEffectData.tres
+MyEffectBehavior.gd
+```
+
+而不是让 `NewContent.gd` 变成一个“大总管”。
+
+---
+
+# 10. DLC：NCL 最重要的扩展边界之一
+
+## 10.1 基础内容与 DLC 内容
+
+当前 `ProgressData` 扩展定义了：
+
+```gdscript
+var mod_content_configs = [
+    ["NewContentData.tres", "", ""],
+    ["NewContentDataDLC1.tres", "res://dlcs/dlc_1/dlc_data.tres", "abyssal_terrors"]
 ]
 ```
 
-那么 NCL 在 `add_resources()` 时会自动：
-
-1. 根据角色 ID 查找角色。
-2. 检查该角色是否已经拥有这把武器。
-3. 没有则加入 `starting_weapons`。
-
-卸载时则会反向移除。
-
-因此你不需要为“角色初始武器”再单独写一套注册脚本。
-
-### 推荐写法
-
-```text
-CharacterData
-   ↑
-WeaponData.add_to_chars_as_starting
-```
-
-而不是：
-
-```text
-mod_main.gd
-   └── 手动查角色
-       └── 手动 append weapon
-```
-
----
-
-# 13. Content 自动合并机制
-
-NCL 当前支持一个 Mod 同时提供：
+所以一个依赖 NCL 的 Mod 可以同时提供：
 
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
 ```
 
-其中：
+当 `abyssal_terrors` DLC 不可用时，DLC1 内容会被跳过。fileciteturn39file0
 
-- `NewContentData.tres` = 常规内容
-- `NewContentDataDLC1.tres` = DLC1 专属内容
+## 10.2 为什么使用游戏自己的 DLC 边界
 
-NCL 会自动执行属性级合并。
-
-## 13.1 Array 合并
-
-如果两个内容资源都有：
+不推荐每个 Mod 自己做：
 
 ```text
-items = [A, B]
-items = [C, D]
+判断 DLC 是否购买
+判断 DLC 是否加载
+判断哪些资源可用
+自己维护 fallback
 ```
 
-最终：
+推荐：
 
 ```text
-items = [A, B, C, D]
+Base NewContent
+      +
+DLC NewContent
+      ↓
+NCL
+      ↓
+Brotato ProgressData / DLC
 ```
 
-NCL 使用追加方式合并数组。
+NCL 的目标是让内容继续沿着游戏自己已有的 DLC / ProgressData 路径进入运行时。
 
-## 13.2 Dictionary 合并
+## 10.3 两份 Resource 如何合并
 
-例如：
+如果基础内容和 DLC1 内容都存在，NCL 会复制基础 Resource，并按属性类型自动合并：
 
 ```text
-tracked_items = { A: 1 }
-tracked_items = { B: 2 }
+Array      → 第二份追加到第一份
+Dictionary → 第二份 merge，允许覆盖同 key
+其它类型   → 使用 DLC 内容
 ```
 
-最终：
+对应源码：`ncl_merge_arrays()`、`ncl_merge_dictionaries()`、`ncl_auto_merge_property()`。fileciteturn39file0
+
+因此应把 DLC1 设计成：
 
 ```text
-{ A: 1, B: 2 }
+基础内容的增量层
 ```
 
-如果键冲突，第二份内容覆盖第一份内容。
-
-## 13.3 非 Array / Dictionary
-
-对于不可自动合并或发生类型不一致的属性，NCL 使用 `content_2` 的值覆盖 `content_1`，并输出日志。
-
-因此不要假设所有属性都会“智能叠加”。
-
-### 推荐设计
-
-```text
-Array       → 追加式设计
-Dictionary  → 键级合并
-Scalar      → 明确知道谁覆盖谁
-```
+而不是完全独立的第二个 Mod。
 
 ---
 
-# 14. 内容加载与卸载生命周期
-
-NCL 为内容提供完整的成对生命周期：
+# 11. 一个完整的 DLC Godot 工作流
 
 ```text
-add_resources()
-      │
-      ├── TranslationServer
-      ├── ZoneService
-      ├── ItemService
-      ├── Starting Weapons
-      ├── ChallengeService
-      ├── EffectBehaviorService
-      ├── Text
-      ├── RunData
-      └── Custom Resources
-
-remove_resources()
-      │
-      └── 反向清理上述注册
+MyMod/
+├── manifest.json
+├── NewContentData.tres
+├── NewContentDataDLC1.tres
+└── content/
+    ├── characters/
+    │   ├── base_character_data.tres
+    │   └── dlc_character_data.tres
+    └── weapons/
+        ├── base_weapon_data.tres
+        └── dlc_weapon_data.tres
 ```
 
-这意味着如果你编写的是长期运行的 Mod / Mod Loader 生态，**不要只实现添加，不实现删除**。
+基础内容：
 
-### 自定义扩展点
-
-`NewContent.gd` 提供：
-
-```gdscript
-func add_custom_resources() -> void:
-    pass
-
-func remove_custom_resources() -> void:
-    pass
+```text
+NewContentData.tres
+  Characters → base_character_data.tres
+  Weapons    → base_weapon_data.tres
 ```
 
-依赖项目可以通过继承 / 自定义实现，在公共注册流程之外挂接自己的注册资源。
+DLC 内容：
+
+```text
+NewContentDataDLC1.tres
+  Characters → dlc_character_data.tres
+  Weapons    → dlc_weapon_data.tres
+```
+
+运行时：
+
+```text
+DLC 可用
+   ↓
+Base + DLC1
+   ↓
+merged NewContent
+```
+
+DLC 不可用：
+
+```text
+Base only
+```
+
+用户不需要手动修改你的内容表。
 
 ---
 
-# 15. Custom Class 自动发现
+# 12. Global Class：`extensions/services/class_service.gd`
 
-这是 NCL 对 Mod Loader 全局脚本类的另一层基础设施支持。
+NCL 还能帮助依赖项目管理自定义 Global Class。
 
-NCL 启动时会扫描所有 Mod：
+## 12.1 为什么需要它
 
-```text
-mod manifest
-   │
-   └── 是否依赖 NCL？
-           │
-           ├── 否 → 跳过
-           └── 是
-                │
-                ▼
-extensions/services/class_service.gd
-                │
-                ▼
-            get_classes()
-                │
-                ▼
-         注册 Global Classes
-```
+Godot 的自定义类型可以让 Resource/Node 真正成为一个明确的类，而不是仅仅“挂了一个脚本”。
 
-## 15.1 你的 Mod 需要什么
-
-在你的 Mod 中创建：
+典型关系：
 
 ```text
-extensions/services/class_service.gd
+RangedWeaponStats
+       ↑
+       │ extends
+       │
+DotStructureWeaponStats
 ```
 
-并提供：
+## 12.2 约定的文件
+
+```text
+YourMod/extensions/services/class_service.gd
+```
+
+并暴露：
 
 ```gdscript
+extends Reference
+
 static func get_classes() -> Array:
     return [
         {
-            "class": "MyCustomClass",
-            "path": "res://mods-unpacked/MyMod/extensions/my_custom_class.gd"
+            "base": "RangedWeaponStats",
+            "class": "DotStructureWeaponStats",
+            "language": "GDScript",
+            "path": "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
         }
     ]
 ```
 
-具体类数据结构应与你当前 Mod Loader / 项目实现一致。
+真实的 `Yoko-YzTato` 就采用了这一格式。fileciteturn56file0
 
-## 15.2 NCL 做什么
-
-NCL 会：
-
-- 收集所有依赖 NCL 的 Mod 的类。
-- 删除已经不存在的旧类。
-- 删除非法路径的类。
-- 避免同名类重复注册。
-- 通过 Mod Loader 注册新的全局类。
-
-这使多个 Mod 可以共享自定义类，而无需每个 Mod 手动修改 `_global_script_classes`。
-
-### 特别重要
-
-如果你的 Mod 声明依赖 NCL，但没有：
+## 12.3 NCL 的处理流程
 
 ```text
-extensions/services/class_service.gd
+遍历 Mod
+    ↓
+检查 dependencies
+    ↓
+查找 class_service.gd
+    ↓
+调用 get_classes()
+    ↓
+收集所有 Class metadata
+    ↓
+去重
+    ↓
+清理已经失效的 _global_script_classes
+    ↓
+注册新 Class
 ```
 
-NCL 会直接记录 Skip 日志，不会因此让整个加载流程失败。
+NCL 同时检查类脚本路径是否仍然存在，并清理失效注册。fileciteturn36file0
+
+### 注意
+
+Global Class 名称必须尽可能全局唯一。建议：
+
+```text
+YokoFantasyHolyEffect
+YzTatoDotStructureWeaponStats
+```
+
+而不是：
+
+```text
+HolyEffect
+WeaponStats
+```
 
 ---
 
-# 16. End-of-Wave Hooks
+# 13. End-of-Wave Hook
 
-NCL 扩展了 Brotato 主循环的波次结束流程，提供四个稳定的时机：
-
-```gdscript
-Main.NCL_END_WAVE_BEFORE_REWARDS
-Main.NCL_END_WAVE_AFTER_REWARDS
-Main.NCL_END_WAVE_BEFORE_END_RUN_SCENE
-Main.NCL_END_WAVE_BEFORE_CHANGE_SCENE
-```
-
-它们的时间线为：
+NCL 扩展 `Main._on_EndWaveTimer_timeout()`，提供四个明确的 Wave 生命周期节点：
 
 ```text
-波次结束
-  │
-  ▼
 before_wave_rewards
-  │
-  ▼
-原版奖励处理
-  │
-  ▼
 after_wave_rewards
-  │
-  ▼
-挑战 UI
-  │
-  ▼
-before_change_scene
-  │
-  ▼
-切换场景
-```
-
-如果本局结束：
-
-```text
-波次结束
-  │
-  ▼
 before_end_run_scene
-  │
-  ▼
-End Run Scene
+before_change_scene
 ```
 
-## 16.1 注册 Hook
+源码常量：
 
 ```gdscript
-Main.ncl_register_end_wave_hook(
+NCL_END_WAVE_BEFORE_REWARDS
+NCL_END_WAVE_AFTER_REWARDS
+NCL_END_WAVE_BEFORE_END_RUN_SCENE
+NCL_END_WAVE_BEFORE_CHANGE_SCENE
+```
+
+fileciteturn37file0
+
+## 13.1 注册
+
+```gdscript
+main.ncl_register_end_wave_hook(
     "before_wave_rewards",
     self,
-    "my_before_rewards",
+    "_on_before_wave_rewards",
     100
 )
 ```
 
-函数签名：
+参数：
 
-```gdscript
-func my_before_rewards():
-    # 你的逻辑
+```text
+hook_name   Hook 名称
+owner       承载 callback 的 Object
+method_name 要执行的方法
+priority    优先级，数字越小越早
 ```
 
-如果是 `before_change_scene`，可以接收场景参数：
+NCL 按 priority 排序；相同 priority 再按 method name 排序。不要把“注册先后”当作隐式优先级。fileciteturn37file0
+
+## 13.2 注销
 
 ```gdscript
-func my_before_change_scene(scene: String):
-    # 根据 scene 决定行为
+main.ncl_unregister_end_wave_hook(
+    "before_wave_rewards",
+    self,
+    "_on_before_wave_rewards"
+)
 ```
 
-## 16.2 Priority
+## 13.3 Godot 3.x 协程支持
 
-priority 越小越先执行。
+Hook 可以返回 `GDScriptFunctionState`。NCL 会等待：
+
+```gdscript
+yield(result, "completed")
+```
+
+Godot 3.x 的 `yield()` 可以等待信号，也可以等待另一个 yield 函数通过 `completed` 信号结束。citeturn479829search3turn479829search4
 
 例如：
 
-```text
-priority 10  → 先执行
-priority 50
-priority 100 → 后执行
-```
-
-当 priority 相同时，NCL 会按方法名排序，保持稳定顺序。
-
-## 16.3 异步 Hook
-
-Hook 可以返回 `GDScriptFunctionState`。
-
-NCL 会检测并 `yield` 等待，因此可以写：
-
 ```gdscript
-func my_hook():
-    yield(get_tree().create_timer(0.2), "timeout")
-    # 继续执行
+func _on_before_wave_rewards():
+    yield(get_tree(), "idle_frame")
+    do_something()
 ```
 
-这样适合需要等待 UI / Tween / 动画完成的波次结束逻辑。
-
-## 16.4 注销 Hook
-
-```gdscript
-Main.ncl_unregister_end_wave_hook(
-    "before_wave_rewards",
-    self,
-    "my_before_rewards"
-)
-```
-
-推荐在自定义对象销毁或 Mod 生命周期结束时注销，避免持有过期 owner。
-
----
-
-# 17. Consumable 掉落 Hook
-
-NCL 修改了：
-
-```gdscript
-ItemService.get_consumable_to_drop()
-```
-
-流程变为：
+适合：
 
 ```text
-原版随机 Consumable
-        │
-        ▼
-遍历 enabled_dlcs
-        │
-        ▼
-寻找 ncl_update_consumable_to_get()
-        │
-        ▼
-让对应 DLC 修改结果
-        │
-        ▼
-最终 Consumable
+奖励前处理
+奖励后处理
+Run 结束前处理
+切换 Scene 前处理
 ```
 
-## 17.1 基础实现
+不适合拿来替代普通游戏事件系统。
 
-如果你的 Mod 没有特殊需求，什么都不需要做。
+---
 
-## 17.2 自定义掉落逻辑
+# 14. Weapon Lookup
 
-如果你的 DLC 内容需要修改最终掉落，可以在对应 DLC Data 脚本中实现：
+NCL 的 `ItemService` 扩展维护：
 
 ```gdscript
-func ncl_update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
-    # 例如根据自己的规则替换掉落
-    return base_consumable_data
+var ncl_weapon_my_id_lookup: Dictionary = {}
 ```
 
-多个 DLC 可以依次参与处理，因此推荐保持函数：
+提供：
+
+```gdscript
+ncl_is_weapon_id(weapon_my_id)
+ncl_get_weapon_from_id(weapon_my_id)
+ncl_rebuild_weapon_my_id_lookup()
+```
+
+fileciteturn38file0
+
+推荐：
+
+```gdscript
+var weapon = ItemService.ncl_get_weapon_from_id(weapon_id_hash)
+```
+
+不要在高频路径中反复遍历 `ItemService.weapons`。
+
+---
+
+# 15. RunData：Tracking、武器数量与删除
+
+NCL 扩展 `RunData` 的 reset、state save、resume 等路径，用于维护 NCL 自己的 tracking 状态。fileciteturn40file0
+
+### 获取武器数量
+
+```gdscript
+RunData.ncl_get_nb_weapon(weapon_my_id_hash, player_index)
+```
+
+### 按 ID 删除武器
+
+```gdscript
+RunData.ncl_remove_weapon_by_id(weapon, player_index)
+```
+
+该路径会进一步调用 `after_weapon_removed()`，因此优先使用它而不是直接操作玩家武器 Array。
+
+---
+
+# 16. Utils Runtime API
+
+当前 `extensions/utils.gd` 提供的主要 `ncl_*` API：
 
 ```text
-输入 → 判断是否需要修改 → 修改或原样返回
+ncl_quiet_add_stat
+ncl_quiet_set_stat
+ncl_curse_effect_value
+ncl_curse_item
+ncl_curse_enemy
+ncl_create_tracking
+ncl_get_scaling_stats_dmg
+ncl_get_dmg_with_scaling_stats
+ncl_get_num_with_scaling_stats
+ncl_get_dmg_text_with_scaling_stats
+ncl_get_num_text_with_scaling_stats
+ncl_get_range_with_detection
+ncl_get_range_text_with_scaling
+ncl_get_signed_col
+ncl_queue_free_weapon
+ncl_change_weapon_within_run
+ncl_change_weapon_within_shop
+ncl_create_custom_damage_args
+ncl_get_validate_node_name
+ncl_spawn_consumable
+ncl_judge_item_type_from_my_id
+ncl_get_nb_gear
+ncl_add_gear_by_id
+ncl_remove_gear_by_id
+ncl_get_gear_name_from_id
+ncl_get_true_stat_name
+ncl_generate_composite_hash
 ```
 
-而不是无条件覆盖其他 Mod 的结果。
+源码可直接参考 [`extensions/utils.gd`](../extensions/utils.gd)。fileciteturn43file0
 
----
-
-# 18. Weapon Lookup 与运行时换武器
-
-NCL 在 `ItemService` 中维护：
+## 16.1 `ncl_quiet_add_stat`
 
 ```gdscript
-ncl_weapon_my_id_lookup
+Utils.ncl_quiet_add_stat(stat_hash, value, player_index)
 ```
 
-并提供：
+直接修改玩家 stat effect，标记 dirty 并重置 stat cache，适合后台累计值。fileciteturn43file0
+
+## 16.2 `ncl_quiet_set_stat`
 
 ```gdscript
-ItemService.ncl_is_weapon_id(weapon_my_id)
-ItemService.ncl_get_weapon_from_id(weapon_my_id)
-ItemService.ncl_rebuild_weapon_my_id_lookup()
+Utils.ncl_quiet_set_stat(stat_hash, value, player_index)
 ```
 
-## 18.1 判断是不是 Weapon
+与上者类似，但设置绝对值。
+
+## 16.3 `ncl_curse_effect_value`
 
 ```gdscript
-if ItemService.ncl_is_weapon_id(weapon_id):
-    # weapon_id 是武器
-```
-
-## 18.2 通过 ID 取武器
-
-```gdscript
-var weapon = ItemService.ncl_get_weapon_from_id(weapon_id)
-```
-
-## 18.3 什么时候需要重建
-
-通常 NCL 自己会在内容加载 / 卸载后调用：
-
-```gdscript
-ItemService.ncl_rebuild_weapon_my_id_lookup()
-```
-
-只有在你绕过 NCL 生命周期、直接修改 `ItemService.weapons` 时，才需要特别考虑手动重建。
-
-**更推荐不要直接绕过 NCL 的注册流程。**
-
----
-
-# 19. RunData：运行时武器管理
-
-NCL 的 `RunData` 扩展还提供：
-
-```gdscript
-RunData.ncl_get_nb_weapon()
-RunData.ncl_remove_weapon_by_id()
-```
-
-## 查询玩家持有数量
-
-```gdscript
-var count = RunData.ncl_get_nb_weapon(
-    weapon_my_id_hash,
-    player_index
-)
-```
-
-## 按 ID 删除武器
-
-```gdscript
-var removed_tracked_value = RunData.ncl_remove_weapon_by_id(
-    weapon_data,
-    player_index
-)
-```
-
-返回值是被删除武器的 `tracked_value`，适合在“替换武器”或“保留历史统计”的机制中继续传递。
-
----
-
-# 20. Utils：通用开发辅助 API
-
-NCL 对 Brotato `Utils` 增加了大量可复用函数。这里按实际用途分类。
-
-## 20.1 静默修改玩家属性
-
-### `ncl_quiet_add_stat`
-
-```gdscript
-Utils.ncl_quiet_add_stat(
-    Keys.stat_damage_hash,
-    10,
-    player_index
-)
-```
-
-作用：增加属性，同时标记 Stat dirty 并重置缓存。
-
-### `ncl_quiet_set_stat`
-
-```gdscript
-Utils.ncl_quiet_set_stat(
-    Keys.stat_damage_hash,
-    100,
-    player_index
-)
-```
-
-适合需要修改当前运行状态，但不希望触发额外 UI / 普通流程的场景。
-
----
-
-## 20.2 Curse 数值处理
-
-### `ncl_curse_effect_value`
-
-这是一个通用的数值变换工具。
-
-```gdscript
-var result = Utils.ncl_curse_effect_value(
-    value,
-    modifier
-)
+Utils.ncl_curse_effect_value(value, modifier, options)
 ```
 
 支持：
 
-```gdscript
-{
-    "modifier_scale": 1.0,
-    "step": 0.01,
-    "process_negative": true,
-    "is_negative": false,
-    "min_num": NAN,
-    "max_num": NAN
-}
+```text
+modifier_scale
+step
+process_negative
+is_negative
+min_num
+max_num
 ```
 
-主要逻辑：
+内部根据正负与选项决定乘法或除法，然后执行 `stepify` 和上下限限制。fileciteturn43file0
 
-- 正向数值：乘以 `1 + modifier`。
-- 负向数值：默认使用除法模型。
-- 可以显式指定 `is_negative`。
-- 可以控制是否处理负值。
-- 可以设置量化步长。
-- 可以设置最大值 / 最小值。
+虽然名字来自 Curse 系统，但本质上是一个可复用的 modifier transform helper。
 
-例如：
+## 16.4 Scaling Stats
 
 ```gdscript
-var cursed = Utils.ncl_curse_effect_value(
-    10.0,
-    0.2,
-    {
-        "step": 1.0,
-        "min_num": 1
-    }
-)
+Utils.ncl_get_scaling_stats_dmg(scaling_stats, player_index)
+Utils.ncl_get_dmg_with_scaling_stats(base_damage, scaling_stats, player_index)
+Utils.ncl_get_num_with_scaling_stats(base_num, scaling_stats, player_index)
 ```
 
----
-
-## 20.3 Curse Item / Enemy
-
-### `ncl_curse_item`
-
-```gdscript
-var cursed_item = Utils.ncl_curse_item(
-    item_data,
-    player_index
-)
-```
-
-它会将逻辑交给游戏 DLC1 数据的 `curse_item()` 实现。
-
-### `ncl_curse_enemy`
-
-```gdscript
-Utils.ncl_curse_enemy(enemy)
-```
-
-它会读取玩家当前 Curse，并找到支持 `_curse_enemy` 的 EffectBehavior 执行对应处理。
-
----
-
-# 21. Damage / Number Scaling 工具
-
-## 21.1 计算带属性缩放的 Damage
-
-```gdscript
-var damage = Utils.ncl_get_dmg_with_scaling_stats(
-    base_damage,
-    scaling_stats,
-    player_index
-)
-```
-
-其中 `scaling_stats` 采用：
+用于：
 
 ```text
-[stat_hash, coefficient]
+基础值 + Stat × scaling
 ```
 
-最终伤害还会考虑玩家的 Percent Damage。
+避免每个 Mod 重写相同数学逻辑。
 
-## 21.2 计算普通数量
+## 16.5 Damage / Number 文本
 
 ```gdscript
-var number = Utils.ncl_get_num_with_scaling_stats(
-    base_num,
-    scaling_stats,
-    player_index
-)
+Utils.ncl_get_dmg_text_with_scaling_stats(...)
+Utils.ncl_get_num_text_with_scaling_stats(...)
 ```
 
-不会额外经过 Percent Damage。
-
-## 21.3 自动生成 Damage 文本
-
-```gdscript
-var text = Utils.ncl_get_dmg_text_with_scaling_stats(
-    base_damage,
-    scaling_stats,
-    {
-        "nb": 1,
-        "effects": [],
-        "player_index": player_index,
-        "show_initial": true
-    }
-)
-```
-
-结果会包含：
-
-- 最终数值
-- 与初始值的差异
-- 缩放属性图标文字
-- 颜色提示
-
-## 21.4 自动生成 Number 文本
-
-```gdscript
-var text = Utils.ncl_get_num_text_with_scaling_stats(
-    base_num,
-    scaling_stats
-)
-```
-
----
-
-# 22. Range Scaling
-
-## `ncl_get_range_with_detection`
-
-```gdscript
-var range = Utils.ncl_get_range_with_detection(
-    base_range,
-    range_rate,
-    player_index,
-    200
-)
-```
-
-其中默认 detection 是 `200`。
-
-## `ncl_get_range_text_with_scaling`
-
-```gdscript
-var text = Utils.ncl_get_range_text_with_scaling(
-    base_range,
-    range_rate,
-    player_index
-)
-```
-
-适合直接生成带缩放说明的 UI 文本。
-
----
-
-# 23. 数值颜色辅助
-
-## `ncl_get_signed_col`
-
-```gdscript
-var color = Utils.ncl_get_signed_col(
-    current,
-    base
-)
-```
-
-默认：
+这些函数可以同时表达：
 
 ```text
-增加 → positive color
-降低 → negative color
-不变 → white
+最终值
+原始值
+数量
+Scaling Stat 图标文本
+正负变化颜色
 ```
 
-如果需要反向语义：
+fileciteturn43file0
+
+## 16.6 Range Scaling
 
 ```gdscript
-Utils.ncl_get_signed_col(current, base, true)
+Utils.ncl_get_range_with_detection(...)
+Utils.ncl_get_range_text_with_scaling(...)
 ```
 
-适合“数值越低越好”这类特殊 UI。
+用于基础 Range、Range Stat scaling 和 detection 三者的组合。
+
+## 16.7 Weapon 动态替换
+
+```gdscript
+Utils.ncl_change_weapon_within_run(...)
+Utils.ncl_change_weapon_within_shop(...)
+```
+
+分别处理战斗中的 Weapon 替换和商店中的 Weapon 替换。
+
+内部会同步处理 weapon slot、`tracked_value`、cursed weapon 状态、Shop 刷新等细节，因此优先使用这些 API，而不要自己修改多个内部数组。fileciteturn43file0
 
 ---
 
-# 24. Weapon 动态替换
+# 17. 自定义 Damage Number
 
-NCL 提供两套工具，用于在游戏进行过程中把已有武器替换成另一把武器。
-
-## 24.1 战斗中替换
-
-```gdscript
-Utils.ncl_change_weapon_within_run(
-    weapon_position,
-    new_weapon_id,
-    player_index
-)
-```
-
-它会处理：
-
-1. 从当前武器列表移除旧武器。
-2. 调整后续武器位置。
-3. 获取新武器。
-4. 保留 tracked value。
-5. 如旧武器被 Curse，继续传递最低 Curse 强度。
-6. 重新加入 RunData。
-7. 延迟添加到玩家当前武器节点。
-
-因此比手动 `erase + add_weapon` 更安全。
-
-## 24.2 商店中替换
-
-```gdscript
-Utils.ncl_change_weapon_within_shop(
-    weapon,
-    new_weapon_id,
-    player_index,
-    shop
-)
-```
-
-除了替换 RunData 外，还会更新：
-
-- Shop weapon container
-- Shop statistics
-- Shop items
-- Focus
-- Combine sound
-
-如果你的机制是“锻造 / 合成 / 武器变形”，优先使用这两个函数。
-
----
-
-# 25. 自定义伤害参数与自定义飘字
-
-NCL 扩展了 `FloatingTextManager`。
-
-如果 `TakeDamageArgs` 中包含：
+NCL 扩展 `FloatingTextManager`，识别 `TakeDamageArgs` metadata：
 
 ```text
 custom_color
 custom_icon
 ```
 
-NCL 会拦截伤害显示，并使用指定颜色 / 图标绘制伤害数字。
+然后沿用 Brotato 原生 damage display。fileciteturn42file0
 
-## 创建参数
-
-```gdscript
-var args = Utils.ncl_create_custom_damage_args(
-    player_index,
-    Color("#FF00AA"),
-    Keys.my_icon_hash
-)
-```
-
-然后将 `args` 传入伤害处理函数。
-
-### 只使用自定义颜色
+创建参数：
 
 ```gdscript
 var args = Utils.ncl_create_custom_damage_args(
     player_index,
-    Color("#FF00AA")
+    Color(1, 0.4, 0.2),
+    my_icon_hash
 )
 ```
 
-### 注意
+思路：
 
-只有在游戏设置允许显示伤害数字时，自定义飘字才会真正显示。
+```text
+你的伤害逻辑
+      ↓
+TakeDamageArgs
+      ↓
+NCL FloatingTextManager
+      ↓
+Brotato 原生 Damage Number
+```
+
+这样不需要创建第二套 Damage Number Node。
 
 ---
 
-# 26. Consumable 生成
-
-## `ncl_spawn_consumable`
+# 18. Consumable 运行时生成
 
 ```gdscript
 Utils.ncl_spawn_consumable(
     consumable_id,
-    number,
-    position,
+    num,
+    pos,
     spread
 )
 ```
 
-它会：
+该函数优先使用 Brotato 的 consumable pool；只有没有可复用实例时才创建 Scene instance，并设置对应数据、Texture、位置与落点。fileciteturn44file0
 
-1. 从 `ItemService.consumables` 中找到 ConsumableData。
-2. 尝试从游戏对象池复用实例。
-3. 没有实例时创建新节点。
-4. 设置图标与数据。
-5. 在指定位置生成。
-6. 给一个可控的随机散布距离。
-
-适用于：
-
-- 击杀掉落
-- 技能生成
-- 宝箱奖励
-- 自定义事件
+这正是 NCL “尽可能复用游戏已有对象池和 Scene 生命周期”的设计。
 
 ---
 
-# 27. Item / Weapon 通用 Gear API
+# 19. Gear API：统一处理 Item / Weapon
 
-NCL 提供一套可以同时处理 Item 和 Weapon 的统一 API。
-
-## 27.1 判断类型
+NCL 定义：
 
 ```gdscript
-var gear_type = Utils.ncl_judge_item_type_from_my_id(id)
+enum GearType {ITEM, WEAPON}
 ```
 
-结果：
+并提供：
 
 ```gdscript
-Utils.GearType.ITEM
-Utils.GearType.WEAPON
--1
+Utils.ncl_judge_item_type_from_my_id(gear_id)
+Utils.ncl_get_nb_gear(gear_id, player_index)
+Utils.ncl_add_gear_by_id(gear_id, player_index, num)
+Utils.ncl_remove_gear_by_id(gear_id, player_index, num)
+Utils.ncl_get_gear_name_from_id(gear_id, num)
 ```
 
-## 27.2 查询持有数量
+源码会自动判断 ID 属于 Item 还是 Weapon，然后路由到正确的 `ItemService` / `RunData` API。fileciteturn44file0
 
-```gdscript
-var count = Utils.ncl_get_nb_gear(
-    gear_id,
-    player_index
-)
-```
-
-NCL 会自动判断：
+特别适合：
 
 ```text
-Item   → RunData.get_nb_item()
-Weapon → RunData.ncl_get_nb_weapon()
+Debug Menu
+任务奖励
+职业系统
+事件
+成就
+转换型技能
 ```
 
-## 27.3 添加 Gear
+例如：
 
 ```gdscript
-Utils.ncl_add_gear_by_id(
-    gear_id,
-    player_index,
-    1
-)
+Utils.ncl_add_gear_by_id(my_weapon_id, player_index, 1)
 ```
-
-无论 Item / Weapon 都能使用。
-
-## 27.4 删除 Gear
-
-```gdscript
-Utils.ncl_remove_gear_by_id(
-    gear_id,
-    player_index,
-    1
-)
-```
-
-## 27.5 根据 ID 生成带颜色名称
-
-```gdscript
-var text = Utils.ncl_get_gear_name_from_id(
-    gear_id,
-    1
-)
-```
-
-返回的是已经带 Tier 颜色与数量信息的 BBCode 文本，可直接用于 Brotato 的文本 UI。
 
 ---
 
-# 28. Stat 名称转换
-
-## `ncl_get_true_stat_name`
+# 20. `ncl_get_true_stat_name`
 
 ```gdscript
-var text = Utils.ncl_get_true_stat_name(
-    "stat_damage"
-)
+Utils.ncl_get_true_stat_name(stat)
 ```
 
-内部会处理：
+用于把内部 stat key 转换成最终显示名。
 
-- 空字符串
-- `number_of_enemies`
-- `different_item`
-- 普通 Stat key
+源码对 `EMPTY`、`number_of_enemies`、`different_item` 等特殊情况做映射，其余 key 会转为对应的翻译 key。fileciteturn44file0
 
-并自动走 `TranslationServer` / `tr()`。
-
-因此比直接：
-
-```gdscript
-tr(stat)
-```
-
-更适合 Mod 自定义 Stat 文本。
+适合 UI、Debug Tool 和自动生成文本。
 
 ---
 
-# 29. Composite Hash
-
-## `ncl_generate_composite_hash`
+# 21. Composite Hash
 
 ```gdscript
-var hash = Utils.ncl_generate_composite_hash([
-    hash_a,
-    hash_b,
-    hash_c
-])
+Utils.ncl_generate_composite_hash(values)
 ```
 
-内部使用：
+使用固定 prime `31` 逐项生成组合 hash。fileciteturn43file0
+
+适合内部稳定的组合身份值。
+
+---
+
+# 22. DLC Runtime Script Extension
+
+除了 `NewContentDataDLC1.tres`，依赖 Mod 还可以提供：
 
 ```text
-result = result * 31 + value
+extensions/dlc_1_data.gd
 ```
 
-适合将多个 ID / 状态组合成稳定的组合键。
+并继承 Brotato 原生 DLC 数据脚本。
+
+例如 `Yoko-YzTato`：
+
+```gdscript
+extends "res://dlcs/dlc_1/dlc_1_data.gd"
+```
+
+然后覆盖 `curse_item()`，并先调用父逻辑再叠加自己的效果。fileciteturn48file0
+
+Godot 3.x 支持脚本继承；父类同名方法可以使用：
+
+```gdscript
+.some_func()
+```
+
+调用。citeturn479829search0
+
+NCL 会检测依赖 Mod 是否存在 `extensions/dlc_1_data.gd`，如果存在则通过 `install_script_extension()` 安装。fileciteturn39file0
 
 ---
 
-# 30. 节点名称与对象池辅助
+# 23. NCL 自己是怎么启动的？
 
-## `ncl_get_validate_node_name`
-
-用于处理 Godot 运行时节点名中的 `@` 后缀：
-
-```gdscript
-var clean_name = Utils.ncl_get_validate_node_name(node.name)
-```
-
-适合比较实例化 / 动态创建后的节点名称。
-
-## `ncl_queue_free_weapon`
-
-不要直接粗暴 `queue_free()` 运行中的 Weapon 节点。NCL 提供：
-
-```gdscript
-Utils.ncl_queue_free_weapon(weapon)
-```
-
-它会：
-
-- 将 cooldown 设为极大值
-- 禁用 hitbox
-- 禁用 target tracking
-- 隐藏节点
-- 最后禁用节点处理
-
-这样适合在武器热替换时安全退出旧武器。
-
----
-
-# 31. `mod_main.gd`：NCL 自身如何启动
-
-理解 NCL 的启动流程，对开发依赖 Mod 很重要。
-
-当前 `mod_main.gd` 的职责主要有两个：
+`mod_main.gd` 初始化时：
 
 ```text
-① 注册共享自定义类
-② 安装 NCL 对 Brotato 原始脚本的扩展
+获取所有 ModData
+        ↓
+确定 NCL unpacked directory
+        ↓
+install_script_classes()
+        ↓
+install_script_extensions()
 ```
 
-启动时会安装：
+当前安装的 NCL Script Extension 包括：
 
 ```text
 progress_data.gd
@@ -1671,581 +1265,705 @@ floating_text_manager.gd
 item_service.gd
 ```
 
-因此这些扩展都是在 Brotato 原有类上做增量式增强，而不是复制整套系统。
+fileciteturn36file0
+
+这就是为什么你的 Mod 不需要再次安装这些 NCL 扩展。
 
 ---
 
-# 32. 推荐的 Mod 项目结构
+# 24. 多个 Mod 共享 NCL
 
-一个完整的 NCL 依赖 Mod 可以采用：
+典型运行环境：
+
+```text
+NCL
+ ├── Mod A
+ ├── Mod B
+ └── Mod C
+```
+
+每个依赖 Mod 都可以拥有自己的：
+
+```text
+NewContentData.tres
+```
+
+以及可选：
+
+```text
+NewContentDataDLC1.tres
+```
+
+NCL 分别加载、合并，再把资源加入 Brotato 服务。
+
+所以 ID 设计必须跨 Mod 可区分。
+
+NCL 会生成 Content Report，并对部分内容数组检查重复 `my_id`，发现重复时写入错误日志。fileciteturn39file0
+
+### 推荐 ID
+
+```text
+<namespace>_<content_name>
+```
+
+例如：
+
+```text
+fantasy_prism_tower
+fantasy_soul_link
+yztato_chisefengbao
+```
+
+不要使用过于通用的：
+
+```text
+sword
+boss
+item01
+```
+
+---
+
+# 25. Godot Inspector：推荐的生产工作流
+
+大型 NCL Mod 最推荐的数据驱动流程：
+
+```text
+Resource Script
+      ↓
+export properties
+      ↓
+Godot Inspector
+      ↓
+保存 .tres
+      ↓
+NewContentData.tres 聚合
+      ↓
+运行 Brotato
+```
+
+Godot 的 exported property 会被序列化到 Resource/Scene，并可在 Inspector 编辑。citeturn479829search6
+
+例如：
+
+```gdscript
+extends Resource
+
+export(String) var display_name = ""
+export(int) var base_value = 0
+export(Array, Resource) var effects = []
+```
+
+Inspector：
+
+```text
+Display Name  [ ... ]
+Base Value    [ ... ]
+Effects       [Array]
+              ├── Effect A
+              └── Effect B
+```
+
+这比把大量数值硬编码进 GDScript 更适合长期维护。
+
+---
+
+# 26. `.tres` 外部引用注意事项
+
+### 26.1 使用 Godot FileSystem Dock 管理移动
+
+`.tres` 中会保存外部 Resource path。如果直接在操作系统文件管理器移动文件，引用有可能失效。
+
+推荐在 Godot FileSystem Dock 内移动 / 重命名资源。
+
+### 26.2 大型项目尽量拆分 external `.tres`
+
+推荐：
+
+```text
+NewContentData.tres
+    ↓
+CharacterData.tres
+WeaponData.tres
+ItemData.tres
+EffectData.tres
+```
+
+而不是把全部子资源都内嵌进一份巨大 Resource。
+
+Godot 支持递归子 Resource，但大型项目应该主动控制资源边界。citeturn479829search2
+
+---
+
+# 27. Godot Script Extension：为什么 NCL 能“扩展游戏自己”
+
+NCL 大量使用：
+
+```gdscript
+extends "res://singletons/run_data.gd"
+```
+
+或：
+
+```gdscript
+extends "res://singletons/item_service.gd"
+```
+
+这不是复制系统，而是通过 Godot 脚本继承与 Mod Loader Script Extension 把新行为挂在原有服务上。
+
+Godot 3.x 支持 `extends` 继承脚本，并允许通过 `.method()` 调用父级同名函数。citeturn479829search0
+
+这种模式的意义是：
+
+```text
+Brotato 原系统
+      ↑
+Script Extension
+      ↑
+NCL
+      ↑
+你的 Mod
+```
+
+而不是：
+
+```text
+Brotato 系统
+      ×
+完全重写一套 NCL 系统
+```
+
+对兼容性尤其重要：扩展时应尽可能调用父实现，仅增加你的差异逻辑。
+
+---
+
+# 28. 添加 / 卸载生命周期为什么成对出现
+
+NCL 的核心生命周期是：
+
+```gdscript
+add_resources()
+remove_resources()
+```
+
+添加阶段包含：
+
+```text
+Translations
+Zones
+Backgrounds
+Characters
+Entities
+Elites
+Bosses
+Stats
+Items
+Consumables
+Upgrades
+Sets
+Difficulties
+Icons
+Title Screen Backgrounds
+Weapons
+Effects
+Challenges
+Effect Behaviors
+Tracking
+Text registrations
+```
+
+卸载阶段逐项反向移除，然后重新初始化 unlocked pool 与 weapon lookup。fileciteturn34file0
+
+因此不要直接：
+
+```gdscript
+ItemService.items.append(my_item)
+```
+
+再把清理工作遗忘。
+
+优先使用：
+
+```text
+NewContentData.tres → items
+```
+
+让 NCL 成为统一生命周期管理器。
+
+---
+
+# 29. 推荐的大型 Mod 目录结构
 
 ```text
 MyMod/
+├── manifest.json
+├── README.md
+├── LICENSE
+│
+├── NewContentData.tres
+├── NewContentDataDLC1.tres
+│
 ├── content/
 │   ├── characters/
 │   ├── weapons/
 │   ├── items/
-│   ├── entities/
 │   ├── effects/
+│   ├── entities/
+│   ├── elites/
+│   ├── bosses/
 │   ├── challenges/
 │   ├── maps/
-│   └── zones/
-├── extensions/
-│   ├── services/
-│   │   └── class_service.gd
-│   ├── effects/
-│   ├── dlc_1_data.gd
-│   └── ...
+│   ├── zones/
+│   ├── structures/
+│   └── icons/
+│
 ├── translations/
-│   ├── MyMod.zh.translation
 │   ├── MyMod.en.translation
-│   └── ...
-├── NewContentData.tres
-├── NewContentDataDLC1.tres
-├── manifest.json
-├── mod_main.gd
-└── README.md
+│   ├── MyMod.zh.translation
+│   └── MyMod.ja.translation
+│
+└── extensions/
+    ├── services/
+    │   └── class_service.gd
+    ├── dlc_1_data.gd
+    ├── effects/
+    └── systems/
 ```
 
-推荐职责边界：
+可以把它理解成：
 
 ```text
-content/        → 数据
-translations/   → 本地化
-extensions/     → 需要主动执行的运行时逻辑
-NewContent*.tres → 注册清单
-mod_main.gd     → 项目入口与少量运行时安装
+content/       → 资源数据
+extensions/    → 运行时行为 / 游戏集成
+translations/  → 文本
+NewContentData → 内容入口聚合
+manifest       → Mod Loader / 生态元数据
 ```
 
 ---
 
-# 33. 一个完整的最小例子
+# 30. 常见错误
 
-假设你要制作一个新增角色 + 武器 + 道具 + 翻译的 Mod。
+## 30.1 没声明依赖
 
-## 33.1 manifest.json
+症状：`NewContentData.tres` 存在，但 NCL 完全不处理它。
+
+检查：
+
+```json
+"dependencies": ["Yoko-NewContentLoader"]
+```
+
+## 30.2 内容文件名错误
+
+默认发现路径是：
+
+```text
+NewContentData.tres
+NewContentDataDLC1.tres
+```
+
+不要随意改成：
+
+```text
+content.tres
+NewData.tres
+```
+
+除非你同时改变 NCL 的发现逻辑。
+
+## 30.3 Duplicate ID
+
+关注：
+
+```text
+[NCL] Duplicate ids ...
+```
+
+检查你的 Mod 以及与它一起启用的其它 NCL Mod。
+
+## 30.4 把所有逻辑塞进 Resource
+
+Resource 用于描述数据；复杂动态行为应进入：
+
+```text
+extensions/
+Effect Behavior
+Scene Script
+```
+
+## 30.5 直接操作全局数组
+
+不要把：
+
+```gdscript
+ItemService.items.append(...)
+```
+
+当成默认方式。
+
+让 NCL 负责注册和卸载。
+
+## 30.6 覆盖父脚本但不调用父实现
+
+如果必须保留 Brotato 原逻辑：
+
+```gdscript
+func some_func():
+    var result = .some_func()
+    # add your behavior
+    return result
+```
+
+这也是 NCL 自己大量使用的扩展模式。citeturn479829search0
+
+---
+
+# 31. 日志：如何知道 NCL 是否成功工作
+
+重点搜索 Mod Loader 日志中的：
+
+```text
+[NCL]
+```
+
+常见情况：
+
+```text
+Successfully load NewContentData.tres
+Successfully load NewContentDataDLC1.tres
+Successfully load <mod_id>
+Content report: characters=..., weapons=..., items=...
+```
+
+### `Dependency missing`
+
+检查 manifest 是否声明 NCL。
+
+### `NewContentData.tres not found`
+
+检查文件名和 Mod 根目录位置。
+
+### `DLC ... not available`
+
+DLC 不可用，DLC 内容被主动跳过。这是正常的兼容路径。
+
+### `Duplicate ids`
+
+检查 `my_id`。
+
+这些日志来自 `progress_data.gd` 的内容发现、合并和报告逻辑。fileciteturn39file0
+
+---
+
+# 32. 内容不显示时的正确排查顺序
+
+```text
+① Mod Loader 是否发现你的 Mod？
+        ↓
+② manifest.dependencies 是否包含 NCL？
+        ↓
+③ NewContentData.tres 是否存在？
+        ↓
+④ Godot Inspector 是否可以正常打开 Resource？
+        ↓
+⑤ 子 Resource 是否全部能打开？
+        ↓
+⑥ NCL Content Report 是否出现？
+        ↓
+⑦ 是否有 Duplicate ID？
+        ↓
+⑧ Brotato 对应 Service 是否已经接收到资源？
+        ↓
+⑨ 是否需要额外 Runtime Script Extension？
+```
+
+这样可以把：
+
+```text
+Godot 资源问题
+NCL 注册问题
+Brotato Runtime 问题
+```
+
+逐层分离。
+
+---
+
+# 33. 版本与兼容性
+
+当前 manifest：
+
+```text
+NCL version       1.1.0
+Brotato           1.15.4
+Mod Loader        6.3.0
+Dependencies      none
+```
+
+fileciteturn47file0
+
+NCL 是基础层，因此升级后的测试强度应高于普通内容 Mod。
+
+建议回归矩阵：
+
+```text
+NCL 自身
+  ↓
+至少一个内容型 Mod
+  ↓
+至少一个 DLC 型 Mod
+  ↓
+至少一个大量使用 extensions 的 Mod
+```
+
+重点检查：
+
+```text
+ProgressData
+RunData
+Main
+WeaponService
+ItemService
+Utils
+```
+
+因为这些都是当前 NCL 的核心 Script Extension。fileciteturn36file0
+
+---
+
+# 34. 什么时候应该使用 NCL？
+
+非常适合：
+
+```text
+✔ 大量角色 / 武器 / 道具的内容 Mod
+✔ 自定义 Effect 较多的 Mod
+✔ 需要 DLC 分层内容的 Mod
+✔ 需要 RunData tracking
+✔ 需要 Global Class
+✔ 需要 Wave 生命周期 Hook
+✔ 需要跨多个系统复用工具
+✔ 需要复用 Brotato 原生 Service
+✔ 需要长期维护的中大型 Mod
+```
+
+不一定需要：
+
+```text
+△ 极小的单文件 UI Patch
+△ 只改一个数值
+△ 完全不添加 Resource 内容的小型补丁
+```
+
+NCL 的价值随着内容量、运行时扩展数量和多人协作规模增加而增长。
+
+---
+
+# 35. 正确的 NCL 开发思维
+
+遇到一个新需求时，先问：
+
+```text
+我要添加的是“数据”还是“行为”？
+          ↓
+数据 → Godot Resource
+          ↓
+放入 NewContentData
+          ↓
+行为 → 找 Brotato 的所属系统
+          ↓
+优先 Script Extension / extends
+          ↓
+生命周期需求 → Hook
+          ↓
+跨 Run 状态 → RunData tracking
+          ↓
+通用算法 → Utils
+```
+
+不要反过来：
+
+```text
+先写一个巨大的 Manager
+       ↓
+再强行把 Brotato 塞进去
+```
+
+NCL 的目的正是把这些边界提前固定下来。
+
+---
+
+# 36. 完整小型示例
+
+目标：
+
+```text
+新角色
+新武器
+新道具
+一个 tracking value
+```
+
+目录：
+
+```text
+MyDemoMod/
+├── manifest.json
+├── NewContentData.tres
+└── content/
+    ├── characters/
+    │   └── demo_character_data.tres
+    ├── weapons/
+    │   └── demo_weapon_data.tres
+    └── items/
+        └── demo_item_data.tres
+```
+
+manifest：
 
 ```json
 {
-  "name": "ExampleMod",
-  "namespace": "Example",
+  "name": "DemoMod",
+  "namespace": "Demo",
   "version_number": "1.0.0",
-  "description": "Example content mod powered by Yoko-NewContentLoader.",
   "dependencies": [
     "Yoko-NewContentLoader"
   ]
 }
 ```
 
-## 33.2 NewContentData.tres
+Inspector：
 
 ```text
-[gd_resource type="Resource" load_steps=5 format=2]
+My Id: DemoMod
 
-[ext_resource path="res://mods-unpacked/Yoko-NewContentLoader/NewContent.gd" type="Script" id=1]
-[ext_resource path="res://mods-unpacked/ExampleMod/content/characters/example.tres" type="Resource" id=2]
-[ext_resource path="res://mods-unpacked/ExampleMod/content/weapons/example.tres" type="Resource" id=3]
-[ext_resource path="res://mods-unpacked/ExampleMod/content/items/example.tres" type="Resource" id=4]
+Characters:
+  - demo_character_data.tres
 
-[resource]
-script = ExtResource( 1 )
-my_id = "ExampleMod"
-characters = [ ExtResource( 2 ) ]
-weapons = [ ExtResource( 3 ) ]
-items = [ ExtResource( 4 ) ]
+Weapons:
+  - demo_weapon_data.tres
+
+Items:
+  - demo_item_data.tres
+
+Tracked Effects:
+  demo_kills: 0
 ```
 
-## 33.3 启动后的实际流程
+启动后：
 
 ```text
-Brotato 启动
-     │
-     ▼
-Mod Loader 发现 ExampleMod
-     │
-     ▼
-检查 manifest.dependencies
-     │
-     ├── 没有 NCL → 不处理
-     │
-     └── 有 NCL
-           │
-           ▼
-     读取 NewContentData.tres
-           │
-           ▼
-     合并为 ExampleMod 内容
-           │
-           ▼
-     加入 ItemService.characters
-     加入 ItemService.weapons
-     加入 ItemService.items
-           │
-           ▼
-     刷新索引 / Pool / Hash
-           │
-           ▼
-        游戏可用
+发现 DemoMod
+      ↓
+读取 NewContentData.tres
+      ↓
+注册 Character / Weapon / Item
+      ↓
+初始化 tracking
+      ↓
+刷新 unlocked pool
+      ↓
+重建 weapon lookup
 ```
+
+整个注册框架无需由你的 Mod 再写一遍。
 
 ---
 
-# 34. DLC1 Mod 的正确写法
+# 37. 大型 Mod 建议
 
-如果你的内容只应该在游戏拥有 DLC1 时可用，可以使用：
-
-```text
-NewContentDataDLC1.tres
-```
-
-同时可以提供：
+当项目达到几十个角色、几百件物品、大量 Effect 后，建议进一步按职责拆分：
 
 ```text
-extensions/dlc_1_data.gd
+content/
+├── characters/
+├── weapons/
+│   ├── melee/
+│   ├── ranged/
+│   └── special/
+├── items/
+│   ├── offensive/
+│   ├── defensive/
+│   └── utility/
+├── effects/
+├── entities/
+├── zones/
+└── challenges/
 ```
 
-NCL 会检查当前游戏是否存在：
-
-```text
-res://dlcs/dlc_1/dlc_data.tres
-```
-
-并且只对声明依赖 NCL 的 Mod 安装对应的 `dlc_1_data.gd`。
-
-### DLC1 路径模型
-
-```text
-MyMod/
-├── NewContentData.tres
-├── NewContentDataDLC1.tres
-└── extensions/
-    └── dlc_1_data.gd
-```
-
-### 适合什么情况
-
-适合：
-
-- 只有 DLC 用户才应该看到的内容
-- 依赖 DLC1 数据结构的玩法
-- Curse 等 DLC 原生机制的扩展
-- 需要在 DLCData 上增加方法的项目
-
-### 不推荐什么
-
-不要简单地在普通 `NewContentData.tres` 中塞入 DLC1 专属资源，再期待运行时自己处理不存在的依赖。
-
-让 NCL 的 DLC 边界承担这项职责更清晰。
-
----
-
-# 35. 多 Mod 协作
-
-NCL 最适合的场景不是“只有一个 Mod 使用它”，而是：
-
-```text
-                  NCL
-          ┌────────┼────────┐
-          │        │        │
-        Mod A    Mod B    Mod C
-          │        │        │
-          ▼        ▼        ▼
-       Content  Content  Content
-```
-
-所有 Mod 共享：
-
-- 内容注册
-- 生命周期
-- DLC 边界
-- 自定义类发现
-- 运行追踪
-- End Wave hooks
-- Weapon lookup
-- Utils helper
-
-因此 Mod A 不应该直接假设“只有我会修改 `ItemService.items`”。开发时要始终考虑：
-
-```text
-NCL 是共享层
-        ↓
-你的 Mod 只是其中一个消费者
-```
-
----
-
-# 36. 如何设计一个“真正兼容 NCL”的 Mod
-
-## 原则一：数据优先
-
-优先：
+然后让：
 
 ```text
 NewContentData.tres
 ```
 
-而不是：
+担任“内容入口聚合器”。
 
-```text
-mod_main.gd
-└── 一大堆 append()
-```
+这样可以：
 
-## 原则二：只扩展需要扩展的系统
-
-例如你只是新增 10 把武器，不应该去覆盖：
-
-```text
-RunData
-ItemService
-Main
-ProgressData
-```
-
-只需要把武器放进：
-
-```gdscript
-NewContent.weapons
-```
-
-## 原则三：不要重复注册
-
-不要自己再调用：
-
-```gdscript
-ItemService.weapons.append(...)
-```
-
-同时又让 NCL 加一次。
-
-否则容易造成：
-
-- 重复武器
-- duplicate ID
-- Pool 异常
-- 商店出现重复内容
-
-## 原则四：自定义 ID 必须稳定
-
-建议：
-
-```text
-namespace_feature_name
-```
-
-例如：
-
-```text
-mythic_sword
-void_core
-stitch_clock
-```
-
-避免简单：
-
-```text
-sword
-item1
-boss
-```
-
-## 原则五：不要依赖加载顺序的偶然性
-
-如果你确实需要“某个 Mod 先初始化”，应该通过 manifest dependency / load order 等正式机制解决，而不是假设 Mod Loader 当前恰好先执行了谁。
+- 保持 Inspector 可管理。
+- 保持 Git diff 粒度小。
+- 允许多个开发者并行制作内容。
+- 避免 `NewContentData.tres` 变成不可维护的巨型资源。
+- 让 Data 与 Runtime Behavior 独立演进。
 
 ---
 
-# 37. Duplicate ID 与诊断
-
-NCL 会在加载内容后生成 Content Report，并检查各数组中的 `my_id` 重复情况。
-
-典型日志：
+# 38. 发布前检查表
 
 ```text
-[NCL] Content report: characters=4, weapons=12, items=20
-```
-
-如果发现重复：
-
-```text
-[NCL] Duplicate ids in weapons: some_weapon_id
-```
-
-### 排查顺序
-
-1. 搜索两个 Mod 是否使用相同 `my_id`。
-2. 检查基础内容与 DLC1 内容是否重复引用了同一个资源。
-3. 检查是否在 NCL 注册后又手动 append。
-4. 检查资源 duplicate 后是否保持了错误的 ID。
-
-Duplicate ID 是最应该优先修复的问题之一。
-
----
-
-# 38. 常见问题
-
-## Q1：我创建了 NewContentData.tres，为什么游戏里没有内容？
-
-最先检查：
-
-```text
-manifest.dependencies
-```
-
-必须包含：
-
-```json
-"Yoko-NewContentLoader"
-```
-
-然后检查文件名必须是：
-
-```text
-NewContentData.tres
-```
-
-并且位于 Mod 根目录。
-
-## Q2：为什么 DLC1 内容没有加载？
-
-检查：
-
-```text
-1. 游戏是否拥有 DLC1
-2. NewContentDataDLC1.tres 是否存在
-3. manifest 是否依赖 NCL
-4. 内容是否确实能被 Godot load()
-```
-
-如果游戏没有 `abyssal_terrors`，NCL 会主动跳过 DLC1 内容。
-
-## Q3：为什么 class_service.gd 没生效？
-
-检查：
-
-```text
-extensions/services/class_service.gd
-```
-
-是否存在，并且 `get_classes()` 返回的数据是否有效。
-
-## Q4：我能直接修改 ItemService 吗？
-
-技术上可以，但不推荐。
-
-优先使用：
-
-```gdscript
-NewContent.items
-NewContent.weapons
-NewContent.characters
-```
-
-让 NCL 管理生命周期和索引。
-
-## Q5：多个 Mod 能不能同时使用 NCL？
-
-可以，这正是 NCL 的主要设计目的之一。
-
-每个 Mod 会被单独发现，然后各自的 NewContent 数据都会进入游戏的共享服务。
-
-## Q6：NCL 会自动处理我的自定义玩法吗？
-
-不会。
-
-NCL 负责的是基础注册和公共桥接。复杂机制仍然由你的：
-
-```text
-extensions/
-```
-
-负责。
-
-## Q7：我什么时候应该写自己的 `mod_main.gd`？
-
-当你的 Mod 需要：
-
-- 安装脚本扩展
-- 注册自定义运行时服务
-- 建立自定义单例 / 节点
-- 安装自己的 DLC 行为
-- 设置特殊初始化逻辑
-
-如果只是增加静态内容，通常不需要大量自定义代码。
-
----
-
-# 39. 推荐的开发工作流
-
-```text
-需求
- │
- ▼
-判断是不是“内容”
- │
- ├── 是 → NewContentData.tres
- │
- └── 否 → 是否需要修改 Brotato 运行时？
-                    │
-                    ├── 否 → 结束
-                    │
-                    └── 是 → extensions/
-                                 │
-                                 ▼
-                           找到真正的宿主服务
-                                 │
-                                 ▼
-                           最小化脚本扩展
-                                 │
-                                 ▼
-                           使用 NCL 公共 API
-                                 │
-                                 ▼
-                              测试
-                                 │
-                                 ▼
-                         检查 Content Report
-                                 │
-                                 ▼
-                             打包发布
-```
-
-### 每次增加新内容之前先问 3 个问题
-
-```text
-1. 这是 Resource 还是 Runtime Behavior？
-2. 如果是 Resource，NewContent 有对应字段吗？
-3. 如果没有字段，能否通过现有 Hook / Utils 完成？
-```
-
-只有前面都不能解决时，才应该新增基础设施。
-
----
-
-# 40. Release / Compatibility
-
-当前 NCL manifest 声明：
-
-```text
-NCL version        1.1.0
-Brotato            1.15.4
-Mod Loader         6.3.0
-Dependencies       none
-```
-
-`manifest.json` 是版本与兼容性声明的权威来源。
-
-NCL 是“基础层 Mod”，因此版本升级时不能只检查自己是否能启动，还应检查：
-
-```text
-NCL
-├── Yoko-YzTato
-├── Yoko-Fantasy
-├── Yoko-MoreStatsContainer
-├── 其他内容 Mod
-└── 依赖 NCL 的第三方 Mod
-```
-
-尤其需要回归：
-
-- Content 加载 / 卸载
-- DLC1 内容发现
-- duplicate ID 检测
-- 自定义 Global Class
-- End Wave Hook
-- RunData serialization
-- Weapon lookup
-- Consumable drop hook
-- Utils helper
-
-因为基础层的一个改动可能影响所有依赖项目。
-
----
-
-# 41. 调试与日志
-
-NCL 使用 Mod Loader 日志记录加载状态，例如：
-
-```text
-[NCL] Successfully load NewContentData.tres
-[NCL] Successfully load NewContentDataDLC1.tres
-[NCL] Content report: weapons=12, items=30
-[NCL] Duplicate ids in weapons: ...
-[NCL] Skip: Dependency missing
-[NCL] Skip: DLC abyssal_terrors not available
-```
-
-排错时优先关注：
-
-```text
-[NCL] Skip
-[NCL] Error
-[NCL] Duplicate ids
-```
-
-而不是先怀疑你的具体 Item / Weapon 数据。
-
-推荐调试顺序：
-
-```text
-① Manifest dependency
-② Mod 是否被 Mod Loader 发现
-③ NewContentData 是否存在
-④ Content Report
-⑤ Duplicate ID
-⑥ 运行时扩展
+[ ] manifest.json 声明 Yoko-NewContentLoader
+[ ] NewContentData.tres 位于 Mod 根目录
+[ ] 所有 .tres 可在 Godot Inspector 打开
+[ ] 所有 external Resource path 有效
+[ ] 所有 my_id 唯一
+[ ] Translation Resource 已注册
+[ ] DLC 内容进入 NewContentDataDLC1.tres
+[ ] DLC 行为进入 extensions/dlc_1_data.gd
+[ ] 需要 Global Class 时提供 class_service.gd
+[ ] 复杂 Runtime Behavior 不塞进 NewContent.gd
+[ ] 跨 Run 状态使用 RunData tracking
+[ ] 生命周期需求使用 Hook
+[ ] 不维护第二套 ItemService / RunData 数据库
+[ ] 完整启动一次游戏
+[ ] 检查 [NCL] Content report
+[ ] 检查 Duplicate ids
+[ ] 检查 Brotato / Mod Loader 版本
 ```
 
 ---
 
-# 42. 设计建议：什么时候应该使用 NCL
+# 39. 参考资料
 
-非常适合：
+Godot：
 
-- 大量角色 / 武器 / 道具的内容型 Mod
-- 多 DLC / 多模块内容 Mod
-- 多个 Mod 共享运行时扩展
-- 需要统一的内容卸载能力
-- 需要统一的 RunData Tracking
-- 需要自定义 Global Classes
-- 需要在波次生命周期插入玩法
-- 需要扩展 Weapon / Consumable / Floating Text
+- [Godot 3.5 Resources](https://docs.godotengine.org/en/3.5/tutorials/scripting/resources.html)
+- [Godot 3.5 GDScript Basics](https://docs.godotengine.org/en/3.5/getting_started/scripting/gdscript/gdscript_basics.html)
+- [Godot 3.5 GDScript Exports](https://docs.godotengine.org/en/3.5/tutorials/scripting/gdscript/gdscript_exports.html)
+- [Godot 3.5 yield / GDScriptFunctionState](https://docs.godotengine.org/en/3.5/classes/class_%40gdscript.html)
 
-尤其适合这种生态：
+Mod Loader：
 
-```text
-基础设施 Mod
-       │
-       ├── 内容 Mod A
-       ├── 内容 Mod B
-       ├── 内容 Mod C
-       └── 内容 Mod D
-```
+- [Godot Mod Loader documentation](https://wiki.godotmodding.com/)
 
-而不适合把 NCL 当作“我的整个游戏逻辑都应该写在这里”的万能框架。
+NCL 关键源码：
+
+- [`NewContent.gd`](../NewContent.gd) — 内容字段与添加/卸载生命周期
+- [`NewContent.tres`](../NewContent.tres) — Resource 模板
+- [`mod_main.gd`](../mod_main.gd) — NCL 启动与 Script Extension 安装
+- [`extensions/progress_data.gd`](../extensions/progress_data.gd) — Mod/DLC 发现与合并
+- [`extensions/run_data.gd`](../extensions/run_data.gd) — tracking 与武器辅助
+- [`extensions/utils.gd`](../extensions/utils.gd) — Runtime helper API
+- [`extensions/main.gd`](../extensions/main.gd) — End-of-Wave Hook
+- [`extensions/item_service.gd`](../extensions/item_service.gd) — Weapon lookup / Consumable Hook
+- [`extensions/weapon_service.gd`](../extensions/weapon_service.gd) — Weapon Service 扩展
+- [`extensions/floating_text_manager.gd`](../extensions/floating_text_manager.gd) — 自定义 Damage Number
 
 ---
 
-# 43. 一句话理解 NCL
+<div align="center">
 
-可以把 NCL 理解成：
+**Yoko-NewContentLoader · 用 Godot Resource 描述内容，通过 Brotato 原生运行时边界扩展游戏。**
 
-> **“让 Brotato 内容 Mod 按 DLC / ProgressData 的方式进入原生服务，同时给多个 Mod 提供一套可共享的注册、卸载、追踪、Hook 和运行时工具层。”**
-
-你的 Mod 负责：
-
-```text
-我有什么内容？
-我需要什么特殊行为？
-```
-
-NCL 负责：
-
-```text
-我怎么把这些内容正确接入游戏？
-怎么让多个 Mod 共存？
-怎么在需要时卸载？
-怎么让运行时扩展有公共入口？
-```
-
-这就是它作为“基础类 Mod”最重要的价值。
+</div>
