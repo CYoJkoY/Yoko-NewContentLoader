@@ -4,47 +4,44 @@
 
 **Shared content-registration infrastructure for Brotato Mod Loader projects.**
 
-[![Latest Release](https://img.shields.io/github/v/release/CYoJkoY/Yoko-NewContentLoader?display_name=tag&sort=semver&style=flat-square)](https://github.com/CYoJkoY/Yoko-NewContentLoader/releases)
-[![Build](https://img.shields.io/github/actions/workflow/status/CYoJkoY/Yoko-NewContentLoader/release.yml?style=flat-square&label=build)](https://github.com/CYoJkoY/Yoko-NewContentLoader/actions/workflows/release.yml)
-[![Mod Loader](https://img.shields.io/badge/Mod%20Loader-6.3.0-5965FF?style=flat-square)](#compatibility)
-[![Godot](https://img.shields.io/badge/Godot-3.x-478CBF?style=flat-square&logo=godot-engine&logoColor=white)](https://godotengine.org/)
-[![License](https://img.shields.io/github/license/CYoJkoY/Yoko-NewContentLoader?style=flat-square)](LICENSE)
+<p>
+  <a href="https://github.com/CYoJkoY/Yoko-NewContentLoader/releases"><img src="https://img.shields.io/github/v/release/CYoJkoY/Yoko-NewContentLoader?display_name=tag&sort=semver&style=flat-square&label=release" alt="Latest release"></a>
+  <a href="https://github.com/CYoJkoY/Yoko-NewContentLoader/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/CYoJkoY/Yoko-NewContentLoader/release.yml?style=flat-square&label=build" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/Brotato-1.15.4-478CBF?style=flat-square" alt="Brotato 1.15.4">
+  <img src="https://img.shields.io/badge/Mod%20Loader-6.3.0-5965FF?style=flat-square" alt="Mod Loader 6.3.0">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/CYoJkoY/Yoko-NewContentLoader?style=flat-square" alt="MIT License"></a>
+</p>
 
-[Overview](#overview) · [Content model](#content-model) · [Integration](#integration) · [Installation](#installation) · [Development](#development)
+<p><a href="#why-it-exists">Why it exists</a> · <a href="#content-model">Content model</a> · <a href="#integration">Integration</a> · <a href="#installation">Installation</a> · <a href="#development">Development</a></p>
 
 </div>
 
----
+## Why it exists
 
-## Overview
+Brotato content mods repeatedly need to solve the same problem: register a large collection of resources with existing game services while still being able to remove or refresh those resources cleanly.
 
-Yoko-NewContentLoader is shared infrastructure for Brotato content mods. It provides a `NewContent` resource and runtime extensions that let dependent mods register structured content through a common pipeline instead of reimplementing registration logic in each project.
+**Yoko-NewContentLoader** provides that shared boundary. A dependent mod supplies structured content through `NewContent`, and the loader connects that data to Brotato's item, weapon, run, effect, entity, zone, challenge, and translation systems.
 
-It is intended to sit between a content-heavy mod and Brotato's existing services:
+The architecture is intentionally data-driven:
 
 ```text
-Dependent Mod
-     │
-     ├── Characters / Weapons / Items / Effects / Zones / ...
-     │
-     ▼
- NewContent resource
-     │
-     ▼
- NewContent.add_resources()
-     │
-     ├── Item / Weapon services
-     ├── Run / Progress data
-     ├── Effects and entities
-     ├── Zones / challenges
-     └── Translations
+Dependent mod
+    │
+    ▼
+NewContent resource
+    │
+    ▼
+add_resources() / remove_resources()
+    │
+    ▼
+Brotato services + runtime extensions
 ```
 
 ## Content model
 
-`NewContent` groups the data a dependent mod wants to register. The current resource model covers categories including:
+`NewContent` groups the data a dependent mod wants to register.
 
-| Content | Examples |
+| Area | Supported content |
 | :--- | :--- |
 | Gameplay | Characters, enemies, elites, bosses, items, weapons, effects, consumables, upgrades, sets |
 | World | Backgrounds, zones, difficulties, title-screen backgrounds |
@@ -52,47 +49,60 @@ Dependent Mod
 | Localization | Translation resources and localized content |
 | Runtime behavior | Scene, player, enemy, and effect behaviors |
 
-The important boundary is that content remains data-driven while the extension layer handles interactions that require existing Brotato systems.
+The important boundary is that content remains inspectable as data while integration logic stays in the shared loader.
 
 ## Integration
 
-### Add / remove lifecycle
+### Resource lifecycle
 
-`NewContent` exposes paired `add_resources()` and `remove_resources()` flows. Registered resources can therefore be added to the relevant Brotato services and removed again without each dependent mod implementing its own teardown path.
+`NewContent` exposes paired `add_resources()` and `remove_resources()` flows. This gives dependent mods a consistent registration and teardown path instead of requiring each project to implement its own cleanup.
 
 The loader also refreshes relevant service lookups after content changes, including unlocked item pools and weapon ID lookups.
 
-### Custom class discovery
+### Custom classes
 
-Dependent mods can optionally expose class services under:
+A dependent mod can expose class services under:
 
 ```text
 extensions/services/class_service.gd
 ```
 
-`mod_main.gd` can collect the current class set, remove obsolete global registrations, and register valid classes for the active mod stack.
+`mod_main.gd` can collect the active class set, remove obsolete global registrations, and register valid classes for the current mod stack.
 
 ### Script extensions
 
-The project includes extensions for core Brotato systems such as:
+The loader extends core Brotato systems including:
 
-- `ProgressData`
-- `RunData`
-- `Utils`
-- `Main`
-- `WeaponService`
-- `FloatingTextManager`
-- `ItemService`
+```text
+ProgressData
+RunData
+Utils
+Main
+WeaponService
+FloatingTextManager
+ItemService
+```
 
-This makes NewContentLoader more than a resource container: it supplies shared compatibility behavior used by dependent content mods.
+That makes the project shared compatibility infrastructure rather than only a passive resource container.
+
+## Example flow
+
+A dependent mod can create a `NewContent` resource and populate its content arrays with Godot resources.
+
+```gdscript
+var content = preload("res://NewContent.tres")
+content.add_resources()
+```
+
+`NewContent.tres` in this repository acts as the base resource template. Exact fields should follow the version of NewContentLoader installed by the dependent mod stack.
 
 ## Installation
 
-Download the latest `NewContentLoader-*.zip` from [Releases](https://github.com/CYoJkoY/Yoko-NewContentLoader/releases) and place it in Brotato's Mod Loader `mods` directory.
+Download the latest `NewContentLoader-*.zip` from [Releases](https://github.com/CYoJkoY/Yoko-NewContentLoader/releases) and place the ZIP in Brotato's Mod Loader `mods` directory.
 
 Install Yoko-NewContentLoader **before** enabling mods that declare it as a dependency.
 
-For development:
+Development layout:
 
 ```text
 mods-unpacked/
@@ -106,23 +116,11 @@ mods-unpacked/
 
 See the [Godot Mod Loader documentation](https://wiki.godotmodding.com/) for current installation and dependency conventions.
 
-## Example flow
-
-A dependent mod can create a `NewContent` resource and populate its content arrays with Godot resources:
-
-```gdscript
-# Conceptual flow
-var content = preload("res://NewContent.tres")
-content.add_resources()
-```
-
-The repository's `NewContent.tres` acts as the base resource template. The exact resource fields should follow the version of NewContentLoader installed by the dependent mod stack.
-
 ## Development
 
-Treat this project as framework code rather than standalone gameplay content.
+Treat this repository as framework code rather than standalone gameplay content.
 
-When changing registration logic, preserve the separation between:
+When changing registration logic, preserve the boundary:
 
 ```text
 Content resource
@@ -134,9 +132,11 @@ Registration / lifecycle
 Brotato service integration
 ```
 
-Changes affecting registration order, removal behavior, global classes, or service lookups can affect every dependent mod and should therefore be tested with the complete stack.
+Changes to registration order, removal behavior, global class state, or service lookups can affect every dependent mod. Test the complete stack rather than only the loader in isolation.
 
-Releases use semantic version tags, and the release workflow now enforces an exact tag/manifest match:
+### Release validation
+
+Releases use semantic version tags and enforce an exact tag/manifest match:
 
 ```text
 manifest.json: 1.1.0
@@ -145,19 +145,20 @@ manifest.json: 1.1.0
         └── tag v1.2.0  → build rejected
 ```
 
-The workflow also performs Godot resource import, builds the Mod Loader ZIP, preserves generated `.import` data, validates the archive, and verifies the packaged manifest.
+The workflow imports Godot resources, preserves generated `.import` data, builds the Mod Loader ZIP, validates the archive, and verifies the packaged manifest.
 
 ## Compatibility
 
 | Component | Declared target |
 | :--- | :--- |
+| Game | **Brotato 1.15.4** |
 | Engine | Godot 3.x / GDScript |
 | Mod Loader | **6.3.0** |
 | Mod version | **1.1.0** |
-| Brotato game version | **1.15.4** |
+| Dependencies | None |
 | License | MIT |
 
-Because this library is used by other mods, dependent projects should use a compatible NewContentLoader release and test the entire mod stack together.
+`manifest.json` is the source of truth for version and compatibility.
 
 ## Project structure
 
@@ -182,24 +183,24 @@ Yoko-NewContentLoader/
 
 ## Related project
 
-[Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) declares Yoko-NewContentLoader as a required dependency for its content expansion.
+[Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) uses Yoko-NewContentLoader as a required dependency for its content expansion.
+
+## Contributing
+
+Useful contributions improve registration correctness, compatibility, lifecycle handling, dependency interoperability, or developer ergonomics.
+
+When changing shared behavior, document the affected Brotato services and test at least one dependent mod that exercises the changed path.
+
+## Support
+
+If this framework saves you time while developing Brotato content mods, support is available through the deployed payment page:
+
+**https://cyojkoy.github.io/Payment/**
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
 
-## Support the Author
-
-If this framework saves you time while developing or maintaining Brotato content mods, consider supporting its continued development.
-
 <div align="center">
-  <a href="https://cyojkoy.github.io/Payment/">
-    <img src="https://img.shields.io/badge/Support_the_Author-9E8F7E?style=for-the-badge&logo=buy-me-a-coffee&logoColor=BEB8AE" alt="Support the Author">
-  </a>
-</div>
-
----
-
-<div align="center">
-  <sub>Yoko-NewContentLoader · Shared Brotato modding infrastructure by CYoJkoY</sub>
+  <sub>Yoko-NewContentLoader · shared Brotato content infrastructure by CYoJkoY</sub>
 </div>
