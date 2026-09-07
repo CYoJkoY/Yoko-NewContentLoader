@@ -144,8 +144,8 @@ The detailed manuals include a layer-by-layer diagnostic procedure and examples 
 | :--- | :--- |
 | [中文：使用与开发手册](docs/USAGE.md) | 从 Godot Resource 创建，到 DLC、Hook、RunData、Utils 和完整排错 |
 | [English: Usage & Developer Guide](docs/USAGE.en.md) | Full English guide for authors and maintainers |
-| [Godot 3.5 Resources](https://docs.godotengine.org/en/3.5/tutorials/scripting/resources.html) | Resource / `.tres` fundamentals |
-| [Godot 3.5 GDScript](https://docs.godotengine.org/en/3.5/getting_started/scripting/gdscript/gdscript_basics.html) | `extends`, inheritance and GDScript patterns |
+| [Godot 3.6 Resources](https://docs.godotengine.org/en/3.6/tutorials/scripting/resources.html) | Resource / `.tres` fundamentals |
+| [Godot 3.6 GDScript](https://docs.godotengine.org/en/3.6/getting_started/scripting/gdscript/gdscript_basics.html) | `extends`, inheritance and GDScript patterns |
 | [Godot Mod Loader](https://wiki.godotmodding.com/) | Mod Loader installation and extension conventions |
 
 ## <img src="assets/readme/icons/heart.svg" width="20" height="20" alt=""> Support
