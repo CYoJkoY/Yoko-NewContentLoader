@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="assets/hero.svg" alt="Yoko-NewContentLoader — shared Brotato content registration infrastructure" width="1200" style="max-width: 100%; height: auto;">
-
   <h1>Yoko-NewContentLoader</h1>
   <p><strong>Shared content-registration infrastructure for Brotato Mod Loader projects.</strong></p>
   <p>Structured resources · Lifecycle management · Runtime extensions · Mod interoperability</p>
