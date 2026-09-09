@@ -2,7 +2,7 @@
 
 > A developer-focused guide for Brotato mod authors using Godot 3.x and Brotato Mod Loader.
 >
-> **Baseline: NCL 1.1.0 · Brotato 1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
+> **Baseline: NCL 1.1.0 · Brotato 1.1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
 
 > All source references in this document use ordinary GitHub Markdown links. There are no ChatGPT/internal citation markers in the document.
 
@@ -795,7 +795,7 @@ Current baseline:
 
 ```text
 NCL         1.1.0
-Brotato     1.15.4
+Brotato     1.1.15.4
 Mod Loader 6.3.0
 ```
 

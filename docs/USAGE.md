@@ -2,7 +2,7 @@
 
 > 面向 Brotato Mod 开发者、Godot 3.x 开发者，以及希望基于 NCL 构建内容型 Mod 的开发者。
 >
-> **当前基准：NCL 1.1.0 · Brotato 1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
+> **当前基准：NCL 1.1.0 · Brotato 1.1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
 
 > 本文使用的源码链接均为普通 GitHub Markdown 链接，不依赖 ChatGPT/内部引用语法；你可以直接在 GitHub 上点击查看对应源码。
 
@@ -915,7 +915,7 @@ Brotato Runtime 问题
 
 ```text
 NCL version       1.1.0
-Brotato           1.15.4
+Brotato           1.1.15.4
 Mod Loader        6.3.0
 Dependencies      none
 ```
