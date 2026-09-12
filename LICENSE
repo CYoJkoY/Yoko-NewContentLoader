@@ -1,10 +1,10 @@
 YOKO RESTRICTED SOURCE LICENSE
 
-Copyright (c) 2026 CYoJkoY
+Copyright (c) 2026 CYoJkoY and CaveGood
 
 1. Ownership
 
-This software and its original source code are copyrighted works owned by CYoJkoY. This license does not transfer ownership or copyright.
+This software and its original source code are copyrighted works jointly owned by CYoJkoY and CaveGood. This license does not transfer ownership or copyright.
 
 2. Permitted Use
 
@@ -12,7 +12,7 @@ You may obtain, use, inspect, and modify the software for personal, educational,
 
 3. Redistribution Requires Permission
 
-Without prior written permission from CYoJkoY, you may NOT:
+Without prior written permission from CYoJkoY and CaveGood, you may NOT:
 
 - publish or redistribute the original software;
 - publish or redistribute a modified, ported, forked, or derived version;
@@ -20,15 +20,15 @@ Without prior written permission from CYoJkoY, you may NOT:
 - sell, sublicense, rent, lease, or otherwise commercially transfer the software or any modified or derived version;
 - distribute the software through a mod repository, package repository, marketplace, website, forum, archive, or other public or private distribution channel.
 
-Any form of redistribution requires prior written permission from CYoJkoY unless expressly permitted by a separate license or written agreement.
+Any form of redistribution requires prior written permission from CYoJkoY and CaveGood unless expressly permitted by a separate license or written agreement.
 
 4. Attribution for Authorized Modified Distribution
 
-If CYoJkoY grants permission to distribute a modified, ported, forked, or derived version, the original author must be clearly and prominently credited as follows:
+If CYoJkoY and CaveGood grant permission to distribute a modified, ported, forked, or derived version, the original copyright holders must be clearly and prominently credited as follows:
 
-Original author: CYoJkoY
+Original copyright holders: CYoJkoY and CaveGood
 
-The attribution must remain intact and must not be removed, obscured, or replaced. A modified version must clearly indicate that it is modified and must not imply that CYoJkoY is the author of modifications made by another party.
+The attribution must remain intact and must not be removed, obscured, or replaced. A modified version must clearly indicate that it is modified and must not imply that CYoJkoY or CaveGood is the author of modifications made by another party.
 
 5. No Removal of License Notice
 
@@ -36,12 +36,12 @@ The copyright notice and this license must remain with any authorized distribute
 
 6. Third-Party Components
 
-This license applies only to original work owned by CYoJkoY. Third-party code, assets, libraries, or other components remain subject to their respective licenses. Nothing in this license grants rights that CYoJkoY does not have the authority to grant.
+This license applies only to original work jointly owned by CYoJkoY and CaveGood. Third-party code, assets, libraries, or other components remain subject to their respective licenses. Nothing in this license grants rights that CYoJkoY or CaveGood does not have the authority to grant.
 
 7. No Warranty
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL CYoJkoY BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL CYoJkoY or CaveGood BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
 
 8. License Changes
 
-Any exception to these restrictions must be explicitly granted in writing by CYoJkoY. Public availability of the source code does not constitute permission to redistribute or sell the software.
+Any exception to these restrictions must be explicitly granted in writing by CYoJkoY and CaveGood. Public availability of the source code does not constitute permission to redistribute or sell the software.
