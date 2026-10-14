@@ -40,7 +40,6 @@ Yoko-NewContentLoader
     ├── load / merge Resources
     ├── gate DLC content
     ├── add / remove lifecycle
-    ├── Global Class registration
     ├── Script Extensions
     └── runtime helpers
     ↓
@@ -90,7 +89,6 @@ MyMod/
 ├── translations/
 └── extensions/
     ├── services/
-    │   └── class_service.gd
     └── dlc_1_data.gd
 ```
 
@@ -406,47 +404,26 @@ extensions/dlc_1_data.gd
 
 and extend the game's DLC data script. See [Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) for a real dependent-mod example.
 
-## 10. Global Classes with `class_service.gd`
+## 10. Referencing custom scripts
 
-A dependent mod can expose custom Global Class metadata at:
+NCL no longer registers mod global classes or writes `override.cfg` for them. Dependent mods should remove `class_name` from custom scripts and declare dependencies by script path.
 
-```text
-extensions/services/class_service.gd
-```
-
-Example:
+To instantiate a custom script, preload it at the top of the file:
 
 ```gdscript
-extends Reference
+const DOT_STRUCTURE_STATS = preload("res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd")
 
-static func get_classes() -> Array:
-    return [
-        {
-            "base": "RangedWeaponStats",
-            "class": "DotStructureWeaponStats",
-            "language": "GDScript",
-            "path": "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
-        }
-    ]
+func create_stats() -> Resource:
+    return DOT_STRUCTURE_STATS.new()
 ```
 
-NCL processes this as:
+Call static methods through the preloaded constant as well. Use a path when inheriting another mod script:
 
-```text
-find dependent mod
-    ↓
-find class_service.gd
-    ↓
-call get_classes()
-    ↓
-deduplicate metadata
-    ↓
-remove stale registrations
-    ↓
-register valid classes
+```gdscript
+extends "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
 ```
 
-Keep custom class names globally distinctive.
+Vanilla class names such as `RangedWeaponStats` remain available. Existing `.tres` / `.tscn` script-path references stay valid; preserve resource paths, IDs, and exported fields during migration.
 
 ### Why Godot inheritance matters
 
@@ -908,7 +885,7 @@ initialize tracking / pools / lookup
 [ ] translations are registered
 [ ] DLC resources are isolated in NewContentDataDLC1.tres
 [ ] DLC runtime behavior is in extensions/dlc_1_data.gd
-[ ] class_service.gd exists when custom Global Classes are needed
+[ ] custom scripts use preload or script paths instead of mod global class names
 [ ] runtime behavior is not placed in NewContent.gd
 [ ] persistent Run state uses RunData tracking
 [ ] lifecycle work uses End-of-Wave Hooks

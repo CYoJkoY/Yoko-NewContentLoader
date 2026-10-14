@@ -21,7 +21,7 @@
 
 [中文使用与开发手册](docs/USAGE.md) · [English Usage & Developer Guide](docs/USAGE.en.md)
 
-**Covers:** Godot `Resource` / `.tres`, Inspector workflow, every `NewContent` field, DLC loading, Global Classes, Wave Hooks, RunData tracking, Utility APIs, extension patterns, debugging, and publishing.
+**Covers:** Godot `Resource` / `.tres`, Inspector workflow, every `NewContent` field, DLC loading, script references, Wave Hooks, RunData tracking, Utility APIs, extension patterns, debugging, and publishing.
 
 </div>
 
@@ -97,7 +97,6 @@ Brotato          → authoritative runtime
 | Godot workflow | `Resource` + `.tres` based authoring and Inspector-driven content aggregation |
 | DLC | Base content + optional DLC1 content with availability checks and property-level merge behavior |
 | Lifecycle | Paired `add_resources()` / `remove_resources()` registration and teardown |
-| Global classes | Discover, deduplicate, unregister stale, and register dependent-mod Global Classes |
 | Run state | Item/effect tracking, primary-stat registration, weapon helpers |
 | Wave lifecycle | Prioritized hooks before/after rewards and before scene transitions |
 | Runtime helpers | Weapon lookup/replacement, gear helpers, consumable spawning, damage/range/stat scaling and more |

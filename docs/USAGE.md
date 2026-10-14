@@ -40,7 +40,6 @@ Yoko-NewContentLoader
     ├── Resource loading / merge
     ├── DLC gating
     ├── add / remove lifecycle
-    ├── Global Class registration
     ├── Script Extension
     └── Runtime helpers
     ↓
@@ -90,7 +89,6 @@ MyMod/
 ├── translations/
 └── extensions/
     ├── services/
-    │   └── class_service.gd
     └── dlc_1_data.gd
 ```
 
@@ -422,29 +420,26 @@ extensions/dlc_1_data.gd
 
 进行运行时 Script Extension。示例可参考 [Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) 中对应实现。
 
-## 10. Global Class：`class_service.gd`
+## 10. 自定义脚本引用
 
-如果你的 Mod 提供自定义 Global Class，可使用：
+NCL 不再注册 Mod 全局类，也不再为此写入 `override.cfg`。依赖 Mod 应移除自定义脚本的 `class_name`，通过脚本路径声明依赖。
 
-```text
-extensions/services/class_service.gd
-```
-
-例如：
+需要实例化自定义脚本时，在文件顶部预加载：
 
 ```gdscript
-extends Reference
+const DOT_STRUCTURE_STATS = preload("res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd")
 
-static func get_classes() -> Array:
-    return [
-        {
-            "base": "RangedWeaponStats",
-            "class": "DotStructureWeaponStats",
-            "language": "GDScript",
-            "path": "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
-        }
-    ]
+func create_stats() -> Resource:
+    return DOT_STRUCTURE_STATS.new()
 ```
+
+静态方法也通过预加载常量调用。继承另一个 Mod 脚本时使用路径：
+
+```gdscript
+extends "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
+```
+
+原版 `RangedWeaponStats` 等类名仍可使用。已有 `.tres` / `.tscn` 的脚本路径引用保持不变；迁移时保留资源路径、ID 和导出字段。
 
 ### Godot 继承与父类调用
 
@@ -634,8 +629,6 @@ Mod Loader ModData
       ↓
 NCL startup
       ↓
-install_script_classes()
-      ↓
 install_script_extensions()
       ↓
 ProgressData discovers dependent content
@@ -802,7 +795,6 @@ MyMod/
 ├── translations/
 └── extensions/
     ├── services/
-    │   └── class_service.gd
     ├── dlc_1_data.gd
     ├── effects/
     └── systems/
@@ -952,7 +944,6 @@ Utils
 ✔ 大量自定义 Effect
 ✔ DLC 分层内容
 ✔ RunData tracking
-✔ Global Class
 ✔ Wave lifecycle Hook
 ✔ 跨系统 Runtime utility
 ✔ 深度复用 Brotato Service
@@ -1081,7 +1072,7 @@ content/
 [ ] Translation Resource 已注册
 [ ] DLC 内容进入 NewContentDataDLC1.tres
 [ ] DLC 行为进入 extensions/dlc_1_data.gd
-[ ] 需要 Global Class 时提供 class_service.gd
+[ ] 自定义脚本通过 preload 或脚本路径引用，不依赖 Mod 全局类
 [ ] Runtime Behavior 不塞进 NewContent.gd
 [ ] 跨 Run 状态使用 RunData tracking
 [ ] 生命周期需求使用 Hook
