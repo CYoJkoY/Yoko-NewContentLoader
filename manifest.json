@@ -1,7 +1,7 @@
 {
 	"name": "NewContentLoader",
 	"namespace": "Yoko",
-	"version_number": "2.0.0",
+	"version_number": "1.2.0",
 	"description": "A shared Brotato content-registration framework for dependent mods to add structured game content and reusable runtime extensions.",
 	"website_url": "",
 	"dependencies": [
