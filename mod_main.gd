@@ -81,6 +81,7 @@ func install_script_extensions() -> void:
         "weapon_service.gd", # Temporary workaround, will remove once the official fix is in place.
         "floating_text_manager.gd",
         "item_service.gd",
+        "synergy_container.gd",
 
     ]
 
