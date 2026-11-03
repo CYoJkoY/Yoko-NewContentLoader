@@ -250,7 +250,7 @@ During automatic loading, NCL sets the runtime content resource's `my_id` to the
 
 ### `backgrounds`
 
-NCL registers the background and adds it to existing zones' `default_backgrounds`; teardown reverses that operation.
+NCL registers backgrounds in `ItemService.backgrounds` for selection in settings and removes them from that list during teardown. Each zone explicitly defines its own default random pool in `default_backgrounds`; NCL does not automatically add backgrounds to or remove them from other zones' pools. If a zone leaves `default_backgrounds` empty, the base game randomly selects from the global background list.
 
 Source: [`NewContent.gd`](../NewContent.gd).
 

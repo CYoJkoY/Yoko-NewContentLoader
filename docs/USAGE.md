@@ -252,7 +252,7 @@ one effect    → one .tres
 
 ### `backgrounds`
 
-NCL 不只是保存背景，还会在注册阶段把背景加入现有 Zone 的 `default_backgrounds`，卸载时反向移除。
+NCL 将背景注册到 `ItemService.backgrounds`，供设置菜单选择，卸载时从该列表移除。各 Zone 的默认随机背景由自己的 `default_backgrounds` 显式配置；NCL 不会将背景自动加入或移出其他地图的随机池。若地图的 `default_backgrounds` 为空，原版逻辑会从全局背景列表随机选择。
 
 源码：[NewContent.gd](../NewContent.gd)
 

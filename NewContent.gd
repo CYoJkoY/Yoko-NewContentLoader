@@ -102,8 +102,6 @@ func add_resources() -> void:
 
     if !backgrounds.empty():
         ItemService.add_backgrounds(backgrounds)
-        for zone in ZoneService.zones:
-            add_if_not_null(zone.default_backgrounds, backgrounds)
 
     add_if_not_null(ItemService.entities, entities)
     add_if_not_null(ZoneService.bosses, bosses)
@@ -177,8 +175,6 @@ func remove_resources() -> void:
 
     if backgrounds != null:
         ItemService.remove_backgrounds(backgrounds)
-        for zone in ZoneService.zones:
-            erase_if_not_null(zone.default_backgrounds, backgrounds)
     erase_if_not_null(ZoneService.zones, zones)
     
     erase_if_not_null(ItemService.entities, entities)
