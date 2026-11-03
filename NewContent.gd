@@ -1,7 +1,12 @@
 extends Resource
 
+export(String) var content_name = ""
+export(Texture) var content_icon
+export(Texture) var content_logo
 export(String) var my_id
 var my_id_hash: int = Keys.empty_hash
+var _ncl_update_data: UpdateData = null
+var _ncl_registered: bool = false
 
 # Other
 export(Array, Resource) var groups_in_all_zones = []
@@ -78,11 +83,21 @@ func duplicate(subresources:=false) -> Resource:
     return duplication
 
 func add_resources() -> void:
+    if _ncl_registered: return
+    _ncl_registered = true
+    ProgressData.ncl_registered_contents.append(self)
     _generate_hashes()
+    _ncl_initialize_content_hashes()
+    _ncl_register_item_set()
 
     for translation in translations:
         TranslationServer.add_translation(translation)
 
+    zones = zones.duplicate()
+    for i in zones.size():
+        var source: ZoneData = zones[i]
+        zones[i] = source.duplicate()
+        zones[i].default_backgrounds = source.default_backgrounds.duplicate()
     add_if_not_null(ZoneService.zones, zones)
 
     if !backgrounds.empty():
@@ -90,32 +105,29 @@ func add_resources() -> void:
         for zone in ZoneService.zones:
             add_if_not_null(zone.default_backgrounds, backgrounds)
 
-    add_if_not_null(ItemService.characters, characters)
     add_if_not_null(ItemService.entities, entities)
-    add_if_not_null(ItemService.elites, elites)
-    add_if_not_null(ItemService.bosses, bosses)
+    add_if_not_null(ZoneService.bosses, bosses)
+    for zone in zones:
+        zone.elites = zone.elites.duplicate()
+        zone.bosses = zone.bosses.duplicate()
+        for elite in elites:
+            if elite.zone_id == zone.my_id and !zone.elites.has(elite): zone.elites.append(elite)
+        for boss in bosses:
+            if boss.zone_id == zone.my_id and !zone.bosses.has(boss): zone.bosses.append(boss)
     add_if_not_null(ItemService.stats, stats)
-    add_if_not_null(ItemService.items, items)
     add_if_not_null(ItemService.consumables, consumables)
     add_if_not_null(ItemService.upgrades, upgrades)
     add_if_not_null(ItemService.sets, sets)
     add_if_not_null(ItemService.difficulties, difficulties)
     add_if_not_null(ItemService.icons, icons)
     add_if_not_null(ItemService.title_screen_backgrounds, title_screen_backgrounds)
-    add_if_not_null(ItemService.weapons, weapons)
     add_if_not_null(ItemService.effects, effects)
-
-    add_starting_weapons()
 
     for stat in ItemService.stats:
         stat.generate_hashes()
     
     Utils.reset_stat_keys()
 
-    if !challenges.empty():
-        ChallengeService.challenges.append_array(challenges)
-        ChallengeService.set_stat_challenges()
-    
     add_if_not_null(EffectBehaviorService.scene_effect_behaviors, scene_effect_behaviors)
     add_if_not_null(EffectBehaviorService.enemy_effect_behaviors, enemy_effect_behaviors)
     add_if_not_null(EffectBehaviorService.player_effect_behaviors, player_effect_behaviors)
@@ -142,42 +154,53 @@ func add_resources() -> void:
         RunData.effect_keys_with_weapon_stats.append_array(effect_keys_with_weapon_stats_hash)
 
     add_custom_resources()
-
-    ItemService.init_unlocked_pool()
-    ItemService.ncl_rebuild_weapon_my_id_lookup()
+    if ProgressData.ncl_content_registration_ready:
+        for challenge in challenges:
+            if !ChallengeService.challenges.has(challenge): ChallengeService.challenges.append(challenge)
+            challenge.my_id_hash = Keys.generate_hash(challenge.my_id)
+            ChallengeService.hash_to_id[challenge.my_id_hash] = challenge.my_id
+        ChallengeService.set_stat_challenges()
+        ProgressData.refresh_active_update_data()
+        ProgressData.add_unlocked_by_default()
+        ItemService.init_unlocked_pool()
 
 func remove_resources() -> void:
+    if !_ncl_registered: return
+    _ncl_registered = false
+    ProgressData.ncl_registered_contents.erase(self)
+    ItemService.update_data_list.erase(_ncl_update_data)
+    _ncl_update_data = null
+    _ncl_invalidate_content_caches()
+    ProgressData.refresh_active_update_data()
     for translation in translations:
         TranslationServer.remove_translation(translation)
-
-    erase_if_not_null(ZoneService.zones, zones)
 
     if backgrounds != null:
         ItemService.remove_backgrounds(backgrounds)
         for zone in ZoneService.zones:
             erase_if_not_null(zone.default_backgrounds, backgrounds)
+    erase_if_not_null(ZoneService.zones, zones)
     
-    erase_if_not_null(ItemService.characters, characters)
     erase_if_not_null(ItemService.entities, entities)
-    erase_if_not_null(ItemService.elites, elites)
-    erase_if_not_null(ItemService.bosses, bosses)
+    erase_if_not_null(ZoneService.bosses, bosses)
+    for zone in zones:
+        erase_if_not_null(zone.elites, elites)
+        erase_if_not_null(zone.bosses, bosses)
     erase_if_not_null(ItemService.stats, stats)
-    erase_if_not_null(ItemService.items, items)
     erase_if_not_null(ItemService.consumables, consumables)
     erase_if_not_null(ItemService.upgrades, upgrades)
     erase_if_not_null(ItemService.sets, sets)
     erase_if_not_null(ItemService.difficulties, difficulties)
     erase_if_not_null(ItemService.icons, icons)
     erase_if_not_null(ItemService.title_screen_backgrounds, title_screen_backgrounds)
-    erase_if_not_null(ItemService.weapons, weapons)
     erase_if_not_null(ItemService.effects, effects)
-
-    erase_starting_weapons()
 
     Utils.reset_stat_keys()
 
     erase_if_not_null(ChallengeService.challenges, challenges)
     erase_if_not_null(ChallengeService.stat_challenges, challenges)
+    for challenge in challenges:
+        ChallengeService.hash_to_id.erase(challenge.my_id_hash)
 
     erase_if_not_null(EffectBehaviorService.scene_effect_behaviors, scene_effect_behaviors)
     erase_if_not_null(EffectBehaviorService.enemy_effect_behaviors, enemy_effect_behaviors)
@@ -195,13 +218,6 @@ func remove_resources() -> void:
     remove_custom_resources()
 
     ItemService.init_unlocked_pool()
-    ItemService.ncl_rebuild_weapon_my_id_lookup()
-
-func update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
-    return base_consumable_data
-
-func update_item_effects(item: ItemParentData, _player_index: int) -> ItemParentData:
-    return item
 
 # ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
 func ncl_update_consumable_to_get(base_consumable_data: ConsumableData) -> ConsumableData:
@@ -218,34 +234,40 @@ func erase_if_not_null(array, _items) -> void:
 
     for _item in _items: array.erase(_item)
 
-func add_starting_weapons() -> void:
-    if weapons.empty(): return
-
-    for weapon in weapons:
-        if weapon.add_to_chars_as_starting.empty(): continue
-
-        for character_id in weapon.add_to_chars_as_starting:
-            var already_has_starting_weapon = false
-            var character_data = ItemService.get_element_safe(ItemService.characters, character_id)
-            for starting_weapon in character_data.starting_weapons:
-                if starting_weapon.my_id_hash == weapon.my_id_hash:
-                    already_has_starting_weapon = true
-
-            if !already_has_starting_weapon:
-                character_data.starting_weapons.append(weapon)
-
-func erase_starting_weapons() -> void:
-    if weapons.empty(): return
-
-    for weapon in weapons:
-        if weapon.add_to_chars_as_starting.empty(): continue
-
-        for character_id in weapon.add_to_chars_as_starting:
-            var character_data = ItemService.get_element_safe(ItemService.characters, character_id)
-            character_data.starting_weapons.erase(weapon)
-
 func add_custom_resources() -> void:
     pass
 
 func remove_custom_resources() -> void:
     pass
+
+func _ncl_register_item_set() -> void:
+    var item_set: ItemSetData = ItemSetData.new()
+    item_set.my_id = my_id
+    item_set._generate_hashes()
+    item_set.items = items.duplicate()
+    item_set.weapons = weapons.duplicate()
+    item_set.characters = characters.duplicate()
+    item_set.stats = stats.duplicate()
+    item_set.challenges = challenges.duplicate()
+    _ncl_update_data = UpdateData.new()
+    _ncl_update_data.id = my_id
+    _ncl_update_data.name = content_name if content_name != "" else my_id
+    _ncl_update_data.update_type = UpdateData.UpdateType.UPDATE
+    _ncl_update_data.item_set = item_set
+    _ncl_update_data.icon = content_icon
+    _ncl_update_data.baner_logo = content_logo if content_logo != null else content_icon
+    _ncl_update_data.color = Color.white
+    ItemService.update_data_list.append(_ncl_update_data)
+    _ncl_invalidate_content_caches()
+
+func _ncl_invalidate_content_caches() -> void:
+    ItemService.invalidate_items_cache()
+    ItemService.invalidate_weapons_cache()
+    ItemService.invalidate_characters_cache()
+
+func _ncl_initialize_content_hashes() -> void:
+    for collection in [characters, items, weapons, consumables, upgrades, sets, elites, bosses, icons, challenges]:
+        for resource in collection:
+            if resource.has_method("_generate_hashes"): resource._generate_hashes()
+    for weapon in weapons:
+        if weapon.upgrades_into != null: weapon.upgrades_into.previous_upgrade = weapon

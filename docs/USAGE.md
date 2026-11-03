@@ -2,7 +2,7 @@
 
 > 面向 Brotato Mod 开发者、Godot 3.x 开发者，以及希望基于 NCL 构建内容型 Mod 的开发者。
 >
-> **当前基准：NCL 1.1.0 · Brotato 1.1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
+> **当前基准：NCL 1.1.0 · Brotato 1.2.0.0 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
 
 > 本文使用的源码链接均为普通 GitHub Markdown 链接，不依赖 ChatGPT/内部引用语法；你可以直接在 GitHub 上点击查看对应源码。
 
@@ -31,6 +31,7 @@ Your Mod
     ├── manifest.json
     ├── NewContentData.tres
     ├── NewContentDataDLC1.tres   (可选)
+    ├── NewContentDataDLC2.tres   (可选)
     ├── content/**/*.tres
     ├── translations/*
     └── extensions/*.gd
@@ -77,6 +78,7 @@ MyMod/
 ├── manifest.json
 ├── NewContentData.tres
 ├── NewContentDataDLC1.tres       # 可选
+├── NewContentDataDLC2.tres       # 可选
 ├── content/
 │   ├── characters/
 │   ├── weapons/
@@ -89,7 +91,8 @@ MyMod/
 ├── translations/
 └── extensions/
     ├── services/
-    └── dlc_1_data.gd
+    ├── dlc_1_data.gd            # 可选
+    └── dlc_2_data.gd            # 可选
 ```
 
 目录名是推荐约定，不是 NCL 的发现契约。真正的契约是：`NewContentData.tres` 位于 Mod 根目录，并且它可以正确引用你的 Resource。
@@ -143,6 +146,10 @@ Brotato registration
 ```
 
 具体发现、读取与合并逻辑见 [`extensions/progress_data.gd`](../extensions/progress_data.gd)。
+
+NCL 将合并后的内容注册为原生 `UpdateData` / `ItemSetData`，供内容集选择、商店池、角色、武器和属性面板使用。内容集开关控制参与本局的内容池和所需角色，不卸载 Mod 脚本、职业或地图。
+
+注册完成后，使用 `ProgressData.ncl_get_content(mod_id)` 查询内容资源；未加载的 Mod 返回 `null`。Mod 身份由 NCL 管理，不应加入官方 DLC 所有权列表。
 
 ## 3. Godot Resource：NCL 为什么使用 `.tres`
 
@@ -205,6 +212,9 @@ one effect    → one .tres
 | 字段 | 类型 | 用途 |
 | :--- | :--- | :--- |
 | `my_id` | `String` | 内容集合身份 |
+| `content_name` | `String` | 内容集名称或翻译键；为空时显示 `my_id` |
+| `content_icon` | `Texture` | 内容集小图标 |
+| `content_logo` | `Texture` | 内容列表和详情页的横向标题图；未设置时使用 `content_icon` |
 | `groups_in_all_zones` | `Array, Resource` | 全 Zone 分组资源 |
 | `music_tracks` | `Array, Resource` | 音乐资源 |
 | `backgrounds` | `Array, Resource` | 背景资源 |
@@ -238,15 +248,7 @@ one effect    → one .tres
 
 ### `my_id`
 
-推荐使用稳定且具有命名空间意义的值：
-
-```text
-MyMod
-YzTato
-YokoFantasy
-```
-
-不要让多个独立内容包长期共享一个 ID。
+自动加载时，NCL 将运行时内容资源的 `my_id` 设置为 manifest 的完整 Mod ID，例如 `MyNamespace-MyMod`，并生成对应 hash。查询内容资源和填写角色的内容集要求时使用这个完整 ID。
 
 ### `backgrounds`
 
@@ -258,13 +260,15 @@ NCL 不只是保存背景，还会在注册阶段把背景加入现有 Zone 的 
 
 最终会进入 Brotato 的 `ItemService.characters`。你的角色 Resource 仍然应该遵循 Brotato 原有数据模型。
 
+需要跟随内容集开关的角色，应将 `required_item_set` 设置为该 Mod 的完整 ID。在 `.tres` 中，该字段必须位于 `script` 赋值之后，否则加载时无法正确应用脚本属性。角色的初始武器通过 `starting_weapons` 或 Mod 自己的初始武器映射提供。
+
 ### `stats`
 
 注册 Stat 后，NCL 会重新建立 Stat Key / hash 状态。不要在 Mod 内再维护第二套 Stat 注册系统。
 
 ### `weapons`
 
-注册后 NCL 会维护基于 `my_id_hash` 的 Weapon lookup。如果 WeaponData 设置了 `add_to_chars_as_starting`，NCL 会把它加入对应角色的 `starting_weapons`，并在卸载时反向处理。
+注册后的武器通过原版索引按具体等级资源的 `my_id_hash` 查询。NCL 在注册和移除内容时使相关索引失效，查询 API 见第 12 节。
 
 相关实现：[extensions/item_service.gd](../extensions/item_service.gd) 与 [NewContent.gd](../NewContent.gd)
 
@@ -285,6 +289,8 @@ translations/
 
 分别进入 Brotato 的 Challenge / Zone 服务，并由 NCL 统一维护生命周期。
 
+区域 ID 必须在游戏和所有 Mod 中唯一。将精英、Boss 的 `zone_id` 设置为同一内容资源中目标区域的 `my_id`；NCL 将它们挂到对应的 `ZoneData.elites` / `ZoneData.bosses`，并将 Boss 加入 `ZoneService.bosses`。地图选择和随机选择只包含当前可用区域；未拥有的官方区域元数据仍用于存档依赖校验。
+
 ## 5. Tracking：让自定义状态进入 RunData
 
 ### `tracked_items`
@@ -302,6 +308,8 @@ export(Dictionary) var tracked_effects = {}
 ```
 
 用于 NCL 自己的 Effect tracking。
+
+在资源中声明所需键及初始值后，再调用跟踪 API。新局按这些定义初始化；保存时写入 `ncl_tracked_effects`，续玩时直接恢复存档中的跟踪数据。
 
 运行时 API 位于 [`extensions/run_data.gd`](../extensions/run_data.gd)：
 
@@ -372,18 +380,27 @@ MyEffectBehavior.gd
 
 ## 9. DLC 支持
 
-当前 NCL 的 DLC1 内容入口是：
+当前 NCL 的公共与可选 DLC 内容入口是：
 
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
+NewContentDataDLC2.tres
 ```
 
-DLC1 是否加载由 [`extensions/progress_data.gd`](../extensions/progress_data.gd) 根据游戏 DLC 状态判断。
+加载条件由 [`extensions/progress_data.gd`](../extensions/progress_data.gd) 根据游戏确认的 DLC 所有权判断：
+
+| 注册资源 | 加载条件 |
+| :--- | :--- |
+| `NewContentData.tres` | 始终加载公共内容 |
+| `NewContentDataDLC1.tres` | 文件存在且拥有 `abyssal_terrors` |
+| `NewContentDataDLC2.tres` | 文件存在且拥有 `primal_dread` |
+
+文件存在不代表拥有 DLC。公共资源不要引用需要条件加载的 DLC 专属 Mod 内容。修改 DLC 所有权或启用的 Mod 后重启游戏。
 
 ### 合并规则
 
-当前实现的核心语义是：
+各注册资源使用相同的内容脚本，按公共、DLC1、DLC2 顺序合并：
 
 ```text
 Array
@@ -393,10 +410,10 @@ Dictionary
 → DLC 内容 merge，并允许同 key 覆盖
 
 其它属性
-→ DLC 值覆盖基础值
+→ 后一层非 null 值覆盖前一层
 ```
 
-因此应把 DLC1 当作“基础内容的增量层”，而不是第二个完全独立的 Mod。
+`content_name` / `content_icon` / `content_logo` 的空值保留前一层展示信息。将 DLC1、DLC2 分别作为公共内容的增量层，只填写该层需要增加或覆盖的内容。
 
 ### 推荐工作流
 
@@ -405,24 +422,24 @@ NewContentData.tres
     ↓
 Base content
 
-NewContentDataDLC1.tres
+NewContentDataDLC1.tres / NewContentDataDLC2.tres
     ↓
 Optional DLC layer
     ↓
 NCL merge
 ```
 
-另外，DLC 还可以通过：
+需要扩展 DLC 运行时行为时，使用第 18 节的 DLC Script Extension 入口。
 
-```text
-extensions/dlc_1_data.gd
-```
+### 续玩依赖
 
-进行运行时 Script Extension。示例可参考 [Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) 中对应实现。
+NCL 在运行存档的 `ncl_content_dlc_ids` 中记录各 Mod 实际加载的 DLC 增量层。续玩要求对应内容仍处于注册状态且玩家拥有所需 DLC；缺少依赖时，在内容反序列化前拒绝续玩。`ncl_get_content()` 保留已加载资源供查询，不代表内容当前仍已注册。
+
+手动注册且没有自动加载依赖记录的内容，保存时使用空的 DLC 依赖列表，仍要求续玩前重新注册同一内容 ID；NCL 不推断手动内容的 DLC 依赖。
 
 ## 10. 自定义脚本引用
 
-NCL 不再注册 Mod 全局类，也不再为此写入 `override.cfg`。依赖 Mod 应移除自定义脚本的 `class_name`，通过脚本路径声明依赖。
+NCL 不负责注册 Mod 全局类或为其写入 `override.cfg`。依赖 Mod 的自定义脚本使用路径引用，通过 `extends`、`preload()` 或 `load()` 声明依赖。
 
 需要实例化自定义脚本时，在文件顶部预加载：
 
@@ -439,7 +456,7 @@ func create_stats() -> Resource:
 extends "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
 ```
 
-原版 `RangedWeaponStats` 等类名仍可使用。已有 `.tres` / `.tscn` 的脚本路径引用保持不变；迁移时保留资源路径、ID 和导出字段。
+原版 `RangedWeaponStats` 等类名可直接使用。`.tres` / `.tscn` 通过脚本路径引用自定义类型；保持被引用的资源路径、ID 和导出字段稳定。
 
 ### Godot 继承与父类调用
 
@@ -515,6 +532,8 @@ ncl_get_weapon_from_id(weapon_my_id)
 ncl_rebuild_weapon_my_id_lookup()
 ```
 
+前两个接口委托原版 `get_base_weapon(my_id_hash)`，按具体等级资源的 `my_id_hash` 查询，而不是武器系列的 `weapon_id_hash`。不存在的 ID 由 `ncl_is_weapon_id` 返回 false，`ncl_get_weapon_from_id` 触发断言。`ncl_rebuild_weapon_my_id_lookup()` 用于清空原版索引，下一次查询按需重建。注册或移除内容时已统一使相关缓存失效，无需额外主动构建索引。
+
 源码：[extensions/item_service.gd](../extensions/item_service.gd)
 
 ## 13. RunData 辅助 API
@@ -526,7 +545,7 @@ RunData.ncl_get_nb_weapon(weapon_my_id_hash, player_index)
 RunData.ncl_remove_weapon_by_id(weapon, player_index)
 ```
 
-优先通过 NCL 的移除路径操作武器，避免直接修改内部 Array 而跳过既有生命周期。
+按 ID 移除只选择持有列表中第一个 `my_id_hash` 匹配的武器，再调用原版 `remove_weapon_by_index()`。返回实际被移除武器的 tracked_value；移除后的效果与缓存更新使用该实际实例。没有匹配项时返回 0，不触发移除回调。
 
 ## 14. Utils Runtime API
 
@@ -606,13 +625,12 @@ Utils.ncl_get_gear_name_from_id(gear_id, num)
 
 ## 18. DLC Runtime Script Extension
 
-DLC 行为扩展可以放在：
+DLC 行为扩展放在 Mod 根目录下的以下路径，并继承对应的原生脚本：
 
-```text
-extensions/dlc_1_data.gd
-```
-
-并继承 Brotato 原生 DLC 数据脚本。
+| 扩展入口 | 父脚本 |
+| :--- | :--- |
+| `extensions/dlc_1_data.gd` | `res://dlcs/dlc_1/dlc_1_data.gd` |
+| `extensions/dlc_2_data.gd` | `res://dlcs/dlc_2/dlc_2_data.gd` |
 
 例如：
 
@@ -621,6 +639,8 @@ extends "res://dlcs/dlc_1/dlc_1_data.gd"
 ```
 
 然后通过覆盖方法叠加自己的逻辑，同时尽量保留父实现。
+
+NCL 仅在确认拥有对应 DLC 后安装这些扩展；在内容注册前，使用已安装扩展链创建运行时 DLC 实例并复制导出配置。不要从 Mod 启动入口再次无条件安装这些扩展，也不要直接修改共享的原版 DLC 配置资源。
 
 ## 19. NCL 自身的启动过程
 
@@ -660,6 +680,7 @@ NCL
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
+NewContentDataDLC2.tres
 ```
 
 ID 应保持跨 Mod 可区分，例如：
@@ -776,6 +797,7 @@ MyMod/
 ├── LICENSE
 ├── NewContentData.tres
 ├── NewContentDataDLC1.tres
+├── NewContentDataDLC2.tres
 ├── content/
 │   ├── characters/
 │   ├── weapons/
@@ -796,6 +818,7 @@ MyMod/
 └── extensions/
     ├── services/
     ├── dlc_1_data.gd
+    ├── dlc_2_data.gd
     ├── effects/
     └── systems/
 ```
@@ -817,6 +840,7 @@ MyMod/
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
+NewContentDataDLC2.tres
 ```
 
 ### 25.3 Duplicate ID
@@ -907,7 +931,7 @@ Brotato Runtime 问题
 
 ```text
 NCL version       1.1.0
-Brotato           1.1.15.4
+Brotato           1.2.0.0
 Mod Loader        6.3.0
 Dependencies      none
 ```
@@ -1070,8 +1094,8 @@ content/
 [ ] 所有 external Resource path 有效
 [ ] 所有 my_id 唯一
 [ ] Translation Resource 已注册
-[ ] DLC 内容进入 NewContentDataDLC1.tres
-[ ] DLC 行为进入 extensions/dlc_1_data.gd
+[ ] DLC 内容进入对应的 NewContentDataDLC1.tres 或 NewContentDataDLC2.tres
+[ ] DLC 行为进入对应的 extensions/dlc_1_data.gd 或 dlc_2_data.gd
 [ ] 自定义脚本通过 preload 或脚本路径引用，不依赖 Mod 全局类
 [ ] Runtime Behavior 不塞进 NewContent.gd
 [ ] 跨 Run 状态使用 RunData tracking

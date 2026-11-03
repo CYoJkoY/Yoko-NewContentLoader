@@ -5,7 +5,7 @@
   <p>
     <a href="https://github.com/CYoJkoY/Yoko-NewContentLoader/releases"><img src="https://img.shields.io/github/v/release/CYoJkoY/Yoko-NewContentLoader?display_name=tag&sort=semver&style=flat-square&label=release" alt="Latest release"></a>
     <a href="https://github.com/CYoJkoY/Yoko-NewContentLoader/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/CYoJkoY/Yoko-NewContentLoader/release.yml?style=flat-square&label=build" alt="Build status"></a>
-    <img src="https://img.shields.io/badge/Brotato-1.1.15.4-478CBF?style=flat-square" alt="Brotato 1.1.15.4">
+    <img src="https://img.shields.io/badge/Brotato-1.2.0.0-478CBF?style=flat-square" alt="Brotato 1.2.0.0">
     <img src="https://img.shields.io/badge/Mod%20Loader-6.3.0-5965FF?style=flat-square" alt="Mod Loader 6.3.0">
     <a href="LICENSE"><img src="https://img.shields.io/github/license/CYoJkoY/Yoko-NewContentLoader?style=flat-square" alt="MIT License"></a>
   </p>
@@ -95,7 +95,7 @@ Brotato          → authoritative runtime
 | :--- | :--- |
 | Content registration | Characters, entities, elites, bosses, stats, items, weapons, effects, consumables, upgrades, sets, difficulties, icons, backgrounds, zones, challenges, music and more |
 | Godot workflow | `Resource` + `.tres` based authoring and Inspector-driven content aggregation |
-| DLC | Base content + optional DLC1 content with availability checks and property-level merge behavior |
+| DLC | Base content + optional DLC1/DLC2 content gated by ownership and merged into native item sets |
 | Lifecycle | Paired `add_resources()` / `remove_resources()` registration and teardown |
 | Run state | Item/effect tracking, primary-stat registration, weapon helpers |
 | Wave lifecycle | Prioritized hooks before/after rewards and before scene transitions |
@@ -106,7 +106,7 @@ Brotato          → authoritative runtime
 
 Requirements:
 
-- Brotato **1.1.15.4**
+- Brotato **1.2.0.0**
 - Brotato Mod Loader **6.3.0**
 
 Download the latest `NewContentLoader-*.zip` from [Releases](https://github.com/CYoJkoY/Yoko-NewContentLoader/releases) and place it in the Mod Loader `mods` directory.

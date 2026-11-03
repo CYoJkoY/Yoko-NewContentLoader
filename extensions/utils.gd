@@ -50,7 +50,8 @@ func ncl_curse_item(
     turn_randomization_off: bool = false,
     min_modifier: float = 0.0
 ) -> ItemParentData:
-    var dlc_1: DLCData = ProgressData.get_dlc_data("abyssal_terrors")
+    if !ProgressData.is_dlc_available("abyssal_terrors"): return item_data
+    var dlc_1: DLCData = ItemService.get_dlc_data_by_id("abyssal_terrors")
     if dlc_1 == null: return item_data
     return dlc_1.curse_item(item_data, player_index, turn_randomization_off, min_modifier)
 

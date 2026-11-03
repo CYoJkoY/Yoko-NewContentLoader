@@ -14,7 +14,7 @@ var ncl_end_wave_hooks: Dictionary = {
 
 # ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func _on_EndWaveTimer_timeout() -> void:
-    _coop_upgrades_ui.propagate_call("set_process_input", [true])
+    Utils.set_process_input_where_defined(_coop_upgrades_ui, true)
     DebugService.log_data("_on_EndWaveTimer_timeout")
     SoundManager.clear_queue()
     SoundManager2D.clear_queue()
@@ -38,7 +38,6 @@ func _on_EndWaveTimer_timeout() -> void:
     LinkedStats.reset()
 
     var scene: String
-    var _args: Entity.DieArgs = Utils.default_die_args
     if _is_run_lost or _is_run_won:
         DebugService.log_data("end run...")
         var before_end_run_state = ncl_run_end_wave_hooks(NCL_END_WAVE_BEFORE_END_RUN_SCENE)
@@ -121,6 +120,7 @@ func ncl_run_end_wave_hooks(hook_name: String, args: Array = []):
             yield(result, "completed")
 
 func ncl_process_wave_rewards():
+    _clear_displayed_consumables_ui()
     if RunData.is_coop_run:
         _hud.hide()
         if _coop_upgrades_ui.show_options(_consumables_to_process, _upgrades_to_process):

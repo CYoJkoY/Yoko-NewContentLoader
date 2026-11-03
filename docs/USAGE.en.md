@@ -2,7 +2,7 @@
 
 > A developer-focused guide for Brotato mod authors using Godot 3.x and Brotato Mod Loader.
 >
-> **Baseline: NCL 1.1.0 · Brotato 1.1.15.4 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
+> **Baseline: NCL 1.1.0 · Brotato 1.2.0.0 · Brotato Mod Loader 6.3.0 · Godot 3.x / GDScript**
 
 > All source references in this document use ordinary GitHub Markdown links. There are no ChatGPT/internal citation markers in the document.
 
@@ -31,6 +31,7 @@ Your Mod
     ├── manifest.json
     ├── NewContentData.tres
     ├── NewContentDataDLC1.tres   (optional)
+    ├── NewContentDataDLC2.tres   (optional)
     ├── content/**/*.tres
     ├── translations/*
     └── extensions/*.gd
@@ -77,6 +78,7 @@ MyMod/
 ├── manifest.json
 ├── NewContentData.tres
 ├── NewContentDataDLC1.tres       # optional
+├── NewContentDataDLC2.tres       # optional
 ├── content/
 │   ├── characters/
 │   ├── weapons/
@@ -89,7 +91,8 @@ MyMod/
 ├── translations/
 └── extensions/
     ├── services/
-    └── dlc_1_data.gd
+    ├── dlc_1_data.gd            # optional
+    └── dlc_2_data.gd            # optional
 ```
 
 These directory names are conventions. The important loader contract is that `NewContentData.tres` exists at the mod root and correctly references your Resources.
@@ -143,6 +146,10 @@ Brotato registration
 ```
 
 The discovery and loading path lives in [`extensions/progress_data.gd`](../extensions/progress_data.gd).
+
+NCL registers merged content through native `UpdateData` / `ItemSetData` for content selection, shop pools, characters, weapons and stat panels. The content-set toggle controls the run's content pools and required characters; it does not unload mod scripts, jobs or zones.
+
+After registration, query content with `ProgressData.ncl_get_content(mod_id)`; an unloaded mod returns `null`. NCL manages mod identity separately from official DLC ownership lists.
 
 ## 3. The Godot model behind NCL
 
@@ -203,6 +210,9 @@ The complete field definition is in [`NewContent.gd`](../NewContent.gd).
 | Field | Type | Purpose |
 | :--- | :--- | :--- |
 | `my_id` | `String` | Identity of the content collection |
+| `content_name` | `String` | Content-set name or translation key; defaults to `my_id` when empty |
+| `content_icon` | `Texture` | Small content-set icon |
+| `content_logo` | `Texture` | Wide title image for content entries and details; defaults to `content_icon` |
 | `groups_in_all_zones` | `Array, Resource` | Zone-wide groups |
 | `music_tracks` | `Array, Resource` | Music Resources |
 | `backgrounds` | `Array, Resource` | Background Resources |
@@ -236,15 +246,7 @@ The complete field definition is in [`NewContent.gd`](../NewContent.gd).
 
 ### `my_id`
 
-Use a stable namespace-level identifier:
-
-```text
-MyMod
-YokoFantasy
-YzTato
-```
-
-Keep independent content collections distinct.
+During automatic loading, NCL sets the runtime content resource's `my_id` to the complete manifest mod ID, such as `MyNamespace-MyMod`, and generates its hash. Use this complete ID when querying content and setting a character's required content set.
 
 ### `backgrounds`
 
@@ -256,13 +258,15 @@ Source: [`NewContent.gd`](../NewContent.gd).
 
 Characters are registered into Brotato's `ItemService.characters`. The Character Resource should still follow the game's own content model.
 
+For characters controlled by the content-set toggle, set `required_item_set` to the complete mod ID. In a `.tres` file, assign this field after `script` so Godot can apply the script property correctly. Define starting weapons through the character's `starting_weapons` or the mod's own starting-weapon mapping.
+
 ### `stats`
 
 Custom stat Resources are registered and NCL rebuilds the relevant stat-key/hash state. A dependent mod should not create a second stat registration mechanism.
 
 ### `weapons`
 
-Weapons are registered and NCL maintains a lookup based on `my_id_hash`. When weapon data declares `add_to_chars_as_starting`, NCL adds it to the referenced characters' `starting_weapons` and handles teardown.
+Registered weapons use the native lookup keyed by each specific tier resource's `my_id_hash`. NCL invalidates the relevant indexes when registering or removing content. See section 12 for the query API.
 
 Sources: [`extensions/item_service.gd`](../extensions/item_service.gd) and [`NewContent.gd`](../NewContent.gd).
 
@@ -283,6 +287,8 @@ translations/
 
 They enter Brotato's Challenge and Zone services under the same NCL-managed lifecycle.
 
+Zone IDs must be unique across the game and all mods. Set each elite or boss's `zone_id` to the target zone's `my_id` within the same content resource. NCL adds these entries to `ZoneData.elites` / `ZoneData.bosses` and also registers bosses in `ZoneService.bosses`. Selection and random maps include only available zones; metadata for unowned official zones remains available for save-dependency checks.
+
 ## 5. RunData tracking
 
 ### `tracked_items`
@@ -300,6 +306,8 @@ export(Dictionary) var tracked_effects = {}
 ```
 
 Use this for NCL-specific Effect tracking.
+
+Declare the required keys and initial values in the resource before calling the tracking API. New runs initialize from these definitions; saves store `ncl_tracked_effects`, and resuming restores the saved tracking data directly.
 
 Runtime helpers live in [`extensions/run_data.gd`](../extensions/run_data.gd):
 
@@ -370,16 +378,27 @@ instead of placing gameplay logic in `NewContent.gd`.
 
 ## 9. DLC-aware loading
 
-NCL supports a base Resource and an optional DLC1 Resource:
+NCL supports a base Resource and optional DLC1/DLC2 Resources:
 
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
+NewContentDataDLC2.tres
 ```
 
-The DLC availability check and merge logic are implemented in [`extensions/progress_data.gd`](../extensions/progress_data.gd).
+[`extensions/progress_data.gd`](../extensions/progress_data.gd) loads resources according to DLC ownership reported by the game:
+
+| Registry | Loading condition |
+| :--- | :--- |
+| `NewContentData.tres` | Common content is always loaded |
+| `NewContentDataDLC1.tres` | File exists and `abyssal_terrors` is owned |
+| `NewContentDataDLC2.tres` | File exists and `primal_dread` is owned |
+
+File existence does not grant ownership. Keep conditionally loaded DLC-specific mod content out of the common resource graph. Restart after changing DLC ownership or enabled mods.
 
 ### Merge semantics
+
+Use the same content script in all registries. NCL merges common content, DLC1, then DLC2:
 
 ```text
 Array
@@ -389,24 +408,31 @@ Dictionary
 → merge DLC keys; later values can override
 
 Other properties
-→ DLC value wins
+→ later non-null values override earlier values
 ```
 
-Treat DLC1 as an incremental layer over base content.
+Empty `content_name`, `content_icon` and `content_logo` values preserve the preceding layer's presentation metadata. Treat DLC1 and DLC2 as incremental layers over common content, specifying only the additions or overrides needed by that layer.
 
 ### DLC runtime behavior
 
-A dependent mod may additionally provide:
+Place optional DLC extensions under the mod root and inherit the matching native script:
 
-```text
-extensions/dlc_1_data.gd
-```
+| Extension entry point | Parent script |
+| :--- | :--- |
+| `extensions/dlc_1_data.gd` | `res://dlcs/dlc_1/dlc_1_data.gd` |
+| `extensions/dlc_2_data.gd` | `res://dlcs/dlc_2/dlc_2_data.gd` |
 
-and extend the game's DLC data script. See [Yoko-YzTato](https://github.com/CYoJkoY/Yoko-YzTato) for a real dependent-mod example.
+NCL installs these extensions only when the corresponding DLC is owned. Before content registration, it creates a runtime DLC instance using the installed extension chain and copies the exported configuration. Preserve parent behavior when overriding methods. Do not install these extensions unconditionally from the mod entry point or modify shared vanilla DLC configuration resources.
+
+### Save dependencies
+
+NCL records each mod's loaded DLC layers in the run save's `ncl_content_dlc_ids`. Resuming requires that content to remain registered and the required DLC to be owned; missing dependencies cause the run to be rejected before content deserialization. `ncl_get_content()` retains loaded resources for lookup and does not indicate whether they are currently registered.
+
+Manually registered content without an automatic-loading dependency record is saved with an empty DLC dependency list. The same content ID must be registered again before resuming; NCL does not infer DLC dependencies for manual content.
 
 ## 10. Referencing custom scripts
 
-NCL no longer registers mod global classes or writes `override.cfg` for them. Dependent mods should remove `class_name` from custom scripts and declare dependencies by script path.
+NCL does not register mod global classes or write `override.cfg` for them. Reference custom scripts by path, declaring dependencies through `extends`, `preload()` or `load()`.
 
 To instantiate a custom script, preload it at the top of the file:
 
@@ -423,7 +449,7 @@ Call static methods through the preloaded constant as well. Use a path when inhe
 extends "res://mods-unpacked/YourMod/content/structures/dot_structure_stats.gd"
 ```
 
-Vanilla class names such as `RangedWeaponStats` remain available. Existing `.tres` / `.tscn` script-path references stay valid; preserve resource paths, IDs, and exported fields during migration.
+Vanilla class names such as `RangedWeaponStats` can be used directly. Reference custom types in `.tres` / `.tscn` by script path, and keep referenced resource paths, IDs and exported fields stable.
 
 ### Why Godot inheritance matters
 
@@ -511,7 +537,7 @@ ncl_rebuild_weapon_my_id_lookup()
 
 Source: [`extensions/item_service.gd`](../extensions/item_service.gd).
 
-Use the lookup instead of repeatedly scanning `ItemService.weapons` in hot paths.
+The query helpers delegate to native `get_base_weapon(my_id_hash)`, using the specific tier resource ID rather than the weapon family ID. The predicate returns false for missing IDs; the strict getter asserts. `ncl_rebuild_weapon_my_id_lookup()` clears the native index, which rebuilds on the next query. Content registration/removal invalidates the relevant caches, so callers do not need to build an additional index.
 
 ## 13. RunData weapon helpers
 
@@ -522,7 +548,7 @@ RunData.ncl_get_nb_weapon(weapon_my_id_hash, player_index)
 RunData.ncl_remove_weapon_by_id(weapon, player_index)
 ```
 
-Use the NCL removal path rather than directly deleting from internal arrays so existing removal behavior remains intact.
+Removal selects the first owned weapon with the matching `my_id_hash`, then delegates to native `remove_weapon_by_index()`. It returns that instance's tracked value and uses the actual removed instance for effect and cache updates. A missing match returns 0 without invoking removal callbacks.
 
 ## 14. `Utils.ncl_*` runtime API
 
@@ -694,6 +720,7 @@ Each dependent mod can provide its own:
 ```text
 NewContentData.tres
 NewContentDataDLC1.tres
+NewContentDataDLC2.tres
 ```
 
 NCL combines these into shared Brotato services, so IDs must be distinguishable across the entire mod stack.
@@ -772,7 +799,7 @@ Current baseline:
 
 ```text
 NCL         1.1.0
-Brotato     1.1.15.4
+Brotato     1.2.0.0
 Mod Loader 6.3.0
 ```
 
@@ -883,8 +910,8 @@ initialize tracking / pools / lookup
 [ ] external Resource paths are valid
 [ ] all IDs are unique
 [ ] translations are registered
-[ ] DLC resources are isolated in NewContentDataDLC1.tres
-[ ] DLC runtime behavior is in extensions/dlc_1_data.gd
+[ ] DLC resources use the matching NewContentDataDLC1.tres or NewContentDataDLC2.tres registry
+[ ] DLC runtime behavior uses the matching extensions/dlc_1_data.gd or dlc_2_data.gd entry point
 [ ] custom scripts use preload or script paths instead of mod global class names
 [ ] runtime behavior is not placed in NewContent.gd
 [ ] persistent Run state uses RunData tracking

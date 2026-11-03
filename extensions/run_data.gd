@@ -11,6 +11,9 @@ func reset(restart: bool = false) -> void:
     
 func get_state() -> Dictionary:
     var state: Dictionary =.get_state()
+    state.ncl_content_dlc_ids = {}
+    for content in ProgressData.ncl_get_registered_contents():
+        state.ncl_content_dlc_ids[content.my_id] = ProgressData.ncl_content_dlc_ids.get(content.my_id, []).duplicate()
     state.ncl_tracked_effects = ncl_tracked_effects.duplicate(true)
 
     return state
@@ -65,14 +68,10 @@ func ncl_get_nb_weapon(weapon_my_id_hash: int, player_index: int) -> int:
     return count
 
 func ncl_remove_weapon_by_id(weapon: WeaponData, player_index: int) -> int:
-    var removed_weapon_tracked_value: int = 0
-    var weapons: Array = players_data[player_index].weapons
-    for current_weapon in weapons:
-        if current_weapon.my_id_hash != weapon.my_id_hash: continue
+    var weapons: Array = get_player_weapons_ref(player_index)
+    var weapon_my_id: int = weapon.get_my_id_hash()
+    for index in weapons.size():
+        if weapons[index].get_my_id_hash() == weapon_my_id:
+            return remove_weapon_by_index(index, player_index)
 
-        removed_weapon_tracked_value = current_weapon.tracked_value
-        weapons.erase(current_weapon)
-        break
-
-    after_weapon_removed(weapon, player_index)
-    return removed_weapon_tracked_value
+    return 0

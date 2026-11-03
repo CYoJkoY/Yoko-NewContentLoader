@@ -37,93 +37,85 @@ const CONTENT_ARRAY_PROPERTIES: Array = [
     "player_effect_behaviors"
 ]
 
-var mod_content_configs: Array = [
-
-    ["NewContentData.tres", "", ""],
-    ["NewContentDataDLC1.tres", "res://dlcs/dlc_1/dlc_data.tres", "abyssal_terrors"]
-
+const CONTENT_CONFIGS: Array = [
+    ["NewContentData.tres", ""],
+    ["NewContentDataDLC1.tres", "abyssal_terrors"],
+    ["NewContentDataDLC2.tres", "primal_dread"],
 ]
 
+var _ncl_installed_dlc_ids: Array = []
+var ncl_content_registration_ready: bool = false
+var ncl_contents: Dictionary = {}
+var ncl_registered_contents: Array = []
+var ncl_content_dlc_ids: Dictionary = {}
+
 # ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
+func _ready() -> void:
+    ncl_content_registration_ready = true
+
 func check_for_available_dlcs() -> void:
-    ncl_check_for_available_dlc1_extensions()
     .check_for_available_dlcs()
+    ZoneService.ncl_filter_owned_zones()
+    ncl_install_owned_dlc_extensions()
     ncl_check_for_available_mods()
 
+func check_dlc_valid_for_saved_run_state() -> bool:
+    if !.check_dlc_valid_for_saved_run_state(): return false
+    return ncl_check_content_valid_for_run_state(saved_run_state)
+
+func ncl_check_content_valid_for_run_state(state: Dictionary) -> bool:
+    if !state.get("has_run_state", false): return true
+    var registered_ids: Array = []
+    for content in ncl_registered_contents:
+        registered_ids.append(content.my_id)
+    var requirements: Dictionary = state.get("ncl_content_dlc_ids", {})
+    for mod_id in requirements:
+        if !registered_ids.has(mod_id): return false
+        for dlc_id in requirements[mod_id]:
+            if !is_dlc_available(dlc_id): return false
+    return true
+
 # ══════════════════════════════════════════ Custom ══════════════════════════════════════════ #
-func ncl_check_for_available_dlc1_extensions() -> void:
-    if !File.new().file_exists("res://dlcs/dlc_1/dlc_data.tres"):
-        return
-
-    var mod_datas: Dictionary = ModLoaderMod.get_mod_data_all()
-    for mod_data_id in mod_datas:
-        var mod_data: ModData = mod_datas[mod_data_id]
-        if not mod_data.is_active or not mod_data.is_loadable:
-            continue
-        var dependencies: PoolStringArray = mod_data.manifest.dependencies
-        if not dependencies.has("Yoko-NewContentLoader"):
-            continue
-
-        var dlc_1_gd_path: String = mod_data.dir_path.plus_file("extensions/dlc_1_data.gd")
-        if !Directory.new().file_exists(dlc_1_gd_path):
-            continue
-        ModLoaderMod.install_script_extension(dlc_1_gd_path)
+func ncl_get_content(mod_id: String) -> Resource:
+    return ncl_contents.get(mod_id)
 
 func ncl_check_for_available_mods() -> void:
-    var mod_datas: Dictionary = ModLoaderMod.get_mod_data_all()
-    for mod_data_id in mod_datas:
-        var mod_data: ModData = mod_datas[mod_data_id]
-        if not mod_data.is_active or not mod_data.is_loadable:
-            continue
-        var dependencies: PoolStringArray = mod_data.manifest.dependencies
-        if !dependencies.has("Yoko-NewContentLoader"):
-            ModLoaderLog.info("[NCL] Skip: Dependency missing", mod_data_id)
-            continue
+    for mod_data in ModLoaderStore.mod_load_order:
+        if !mod_data.is_active or !mod_data.is_loadable: continue
+        if !mod_data.manifest.dependencies.has("Yoko-NewContentLoader"): continue
+        var mod_id: String = mod_data.manifest.get_mod_id()
+        if ncl_contents.has(mod_id): continue
 
-        var common_mod_content: Resource = ncl_load_content(mod_data, mod_data_id, 0)
-        var dlc1_mod_content: Resource = ncl_load_content(mod_data, mod_data_id, 1)
+        var merged_content: Resource = null
+        var required_dlcs: Array = []
+        for config in CONTENT_CONFIGS:
+            var dlc_id: String = config[1]
+            if dlc_id != "" and !is_dlc_available(dlc_id): continue
+            var content_path: String = mod_data.dir_path.plus_file(config[0])
+            if !ResourceLoader.exists(content_path): continue
+            var content: Resource = load(content_path)
+            if content == null:
+                ModLoaderLog.error("Cannot load required content resource: " + content_path, mod_id)
+                merged_content = null
+                break
+            merged_content = ncl_merge_contents(merged_content, content, mod_id)
+            if dlc_id != "": required_dlcs.append(dlc_id)
 
-        var mod_content: Resource = ncl_merge_contents(common_mod_content, dlc1_mod_content, mod_data_id)
-        ncl_log_content_report(mod_content, mod_data_id)
-        ModLoaderLog.info("[NCL] Successfully load %s" % [mod_content.my_id], mod_data_id)
-
-        available_dlcs.append(mod_content)
+        if merged_content == null: continue
+        ncl_contents[mod_id] = merged_content
+        ncl_content_dlc_ids[mod_id] = required_dlcs
+        merged_content.add_resources()
+        ncl_log_content_report(merged_content, mod_id)
 
 # ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
-func ncl_load_content(mod_data: ModData, mod_data_id: String, config_index: int) -> Resource:
-    var content_file_name: String = mod_content_configs[config_index][0]
-    var content_path: String = mod_data.dir_path.plus_file(content_file_name)
-    var dlc_path: String = mod_content_configs[config_index][1]
-    var dlc_id: String = mod_content_configs[config_index][2]
-
-    if dlc_path != "" and !is_dlc_available(dlc_id):
-        ModLoaderLog.info("[NCL] Skip: DLC %s not available" % [dlc_id], mod_data_id)
-        return null
-
-    if !Directory.new().file_exists(content_path):
-        ModLoaderLog.info("[NCL] Skip: %s not found" % [content_file_name], mod_data_id)
-        return null
-
-    var mod_content: Resource = load(content_path)
-    if mod_content != null:
-        ModLoaderLog.info("[NCL] Successfully load %s" % [content_file_name], mod_data_id)
-        return mod_content
-    else:
-        ModLoaderLog.info("[NCL] Error: Failed to load %s" % [content_file_name], mod_data_id)
-        return null
-
 func ncl_merge_contents(content_1: Resource, content_2: Resource, new_id: String) -> Resource:
-    match [content_1 == null, content_2 == null]:
-        [true, true]:
-            var merged_content: Resource = load(NEW_CONTENT_RESOURCE_PATH).duplicate()
-            merged_content.my_id = new_id
-            return merged_content
-        [false, true]:
-            content_1.my_id = new_id
-            return content_1
-        [true, false]:
-            content_2.my_id = new_id
-            return content_2
+    if content_1 == null or content_2 == null:
+        var source: Resource = content_1 if content_1 != null else content_2
+        if source == null: source = load(NEW_CONTENT_RESOURCE_PATH)
+        var copy: Resource = source.duplicate()
+        copy.my_id = new_id
+        copy._generate_hashes()
+        return copy
 
     var merged_content: Resource = content_1.duplicate()
     merged_content.my_id = new_id
@@ -131,6 +123,7 @@ func ncl_merge_contents(content_1: Resource, content_2: Resource, new_id: String
     for property_dict in property_list:
         var prop_name: String = property_dict["name"]
         if prop_name in PROPERTIES_TO_IGNORE: continue
+        if (property_dict["usage"] & PROPERTY_USAGE_STORAGE) == 0: continue
 
         var value1 = content_1.get(prop_name)
         var value2 = content_2.get(prop_name)
@@ -142,6 +135,8 @@ func ncl_merge_contents(content_1: Resource, content_2: Resource, new_id: String
     return merged_content
 
 func ncl_auto_merge_property(value1, value2, property_name: String, new_id: String):
+    if property_name in ["content_name", "content_icon", "content_logo"] and (value2 == null or str(value2) == ""):
+        return value1
     if value2 == null:
         return value1
 
@@ -196,3 +191,50 @@ func ncl_log_duplicate_resource_ids(property_name: String, resources: Array, mod
 
     if !duplicates.empty():
         ModLoaderLog.error("[NCL] Duplicate ids in %s: %s" % [property_name, PoolStringArray(duplicates).join(", ")], mod_data_id)
+
+func ncl_install_owned_dlc_extensions() -> void:
+    for dlc in [["abyssal_terrors", "dlc_1_data.gd", "res://dlcs/dlc_1/dlc_1_data.gd"], ["primal_dread", "dlc_2_data.gd", "res://dlcs/dlc_2/dlc_2_data.gd"]]:
+        var dlc_id: String = dlc[0]
+        if !is_dlc_available(dlc_id) or _ncl_installed_dlc_ids.has(dlc_id): continue
+        _ncl_installed_dlc_ids.append(dlc_id)
+        var installed: bool = false
+        for mod_data in ModLoaderStore.mod_load_order:
+            if !mod_data.is_active or !mod_data.is_loadable: continue
+            if !mod_data.manifest.dependencies.has("Yoko-NewContentLoader"): continue
+            var path: String = mod_data.dir_path.plus_file("extensions/" + dlc[1])
+            if !ResourceLoader.exists(path): continue
+            ModLoaderMod.install_script_extension(path)
+            installed = true
+        if !installed: continue
+        for i in ItemService.update_data_list.size():
+            var update: UpdateData = ItemService.update_data_list[i]
+            if update.id != dlc_id or update.update_type != UpdateData.UpdateType.DLC: continue
+            var original: DLCData = update.dlc_data
+            var extended_script: Script = load(dlc[2])
+            var extended: DLCData = extended_script.new()
+            for property in original.get_property_list():
+                if (property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) == 0: continue
+                if (property.usage & PROPERTY_USAGE_STORAGE) == 0: continue
+                extended.set(property.name, original.get(property.name))
+            var owned_update: UpdateData = update.duplicate()
+            owned_update.dlc_data = extended
+            ItemService.update_data_list[i] = owned_update
+
+func ncl_get_available_zones() -> Array:
+    var result: Array = []
+    for zone in ZoneService.zones:
+        if zone.dlc_id == "" or is_dlc_available(zone.dlc_id): result.append(zone)
+    return result
+
+func get_character_difficulty_info(character_id: int, zone_id: int, is_random_zone: bool = false) -> ZoneDifficultyInfo:
+    if !is_random_zone:
+        return .get_character_difficulty_info(character_id, zone_id, false)
+    var lowest: ZoneDifficultyInfo = null
+    for zone in ncl_get_available_zones():
+        var info: ZoneDifficultyInfo = .get_character_difficulty_info(character_id, zone.my_id, false)
+        if lowest == null or info.max_difficulty_beaten.difficulty_value < lowest.max_difficulty_beaten.difficulty_value:
+            lowest = info
+    return lowest
+
+func ncl_get_registered_contents() -> Array:
+    return ncl_registered_contents

@@ -18,12 +18,18 @@ func install_script_extensions() -> void:
     var extensions: Array = [
 
         "progress_data.gd",
+        "progress_data_loader_v3.gd",
         "run_data.gd",
         "utils.gd",
         "main.gd",
         "weapon_service.gd", # Temporary workaround, will remove once the official fix is in place.
         "floating_text_manager.gd",
         "item_service.gd",
+        "music_manager.gd",
+        "wave_manager.gd",
+        "zone_service.gd",
+        "character_selection.gd",
+        "character_selection_inventory.gd",
         "synergy_container.gd",
 
     ]
