@@ -5,4 +5,4 @@ func deserialize_run_state(state: Dictionary) -> Dictionary:
         var invalid_state: Dictionary = state.duplicate()
         invalid_state.has_run_state = false
         return invalid_state
-    return .deserialize_run_state(state)
+    return.deserialize_run_state(state)

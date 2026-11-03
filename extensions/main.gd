@@ -66,13 +66,21 @@ func _on_EndWaveTimer_timeout() -> void:
 
         scene = RunData.get_shop_scene_path()
 
-    var before_change_scene_state = ncl_run_end_wave_hooks(NCL_END_WAVE_BEFORE_CHANGE_SCENE, [scene])
+    var before_change_scene_state = ncl_run_end_wave_hooks(
+        NCL_END_WAVE_BEFORE_CHANGE_SCENE,
+        [scene]
+    )
     if before_change_scene_state is GDScriptFunctionState:
         yield(before_change_scene_state, "completed")
     _change_scene(scene)
 
 # ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
-func ncl_register_end_wave_hook(hook_name: String, owner: Object, method_name: String, priority: int = 100) -> void:
+func ncl_register_end_wave_hook(
+    hook_name: String,
+    owner: Object,
+    method_name: String,
+    priority: int = 100
+) -> void:
     if !ncl_end_wave_hooks.has(hook_name):
         ncl_end_wave_hooks[hook_name] = []
 

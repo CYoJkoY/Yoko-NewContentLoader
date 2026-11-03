@@ -6,8 +6,12 @@ func _on_ZoneSelectionButton_item_selected(index: int) -> void:
     var random_index: int = _zone_selection_button.get_item_count() - 1
     if !_ncl_zone_selection_initialized:
         _ncl_zone_selection_initialized = true
-        index = random_index if ProgressData.settings.zone_is_random else _zone_selection_button.get_item_index(int(ProgressData.settings.zone_selected))
-        if index < 0: index = 0
+        index = (
+            random_index if ProgressData.settings.zone_is_random
+            else _zone_selection_button.get_item_index(int(ProgressData.settings.zone_selected))
+        )
+        if index < 0:
+            index = 0
     elif index < 0 or index >= random_index:
         index = random_index
     _zone_selection_button.select(index)
@@ -25,7 +29,8 @@ func _on_ZoneSelectionButton_item_selected(index: int) -> void:
     _background.texture = _ui_random_zone_background.texture
     _inventory1.update_elements_color(-1)
     reload_info_panel()
-    for panel in _get_panels(): panel._update_bg()
+    for panel in _get_panels():
+        panel._update_bg()
 
 func _setup_zone(index: int) -> void:
     if ProgressData.settings.zone_is_random:

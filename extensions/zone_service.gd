@@ -21,5 +21,6 @@ func ncl_filter_owned_zones() -> void:
 
 func get_zone_data(id: int) -> Resource:
     for zone in _ncl_unavailable_zones:
-        if zone.my_id == id: return zone
-    return .get_zone_data(id)
+        if zone.my_id == id:
+            return zone
+    return.get_zone_data(id)

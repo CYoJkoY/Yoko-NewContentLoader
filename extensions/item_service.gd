@@ -3,10 +3,12 @@ extends "res://singletons/item_service.gd"
 # ══════════════════════════════════════════ Extension ══════════════════════════════════════════ #
 func get_stat(stat_hash: int) -> StatData:
     var stat: StatData =.get_stat(stat_hash)
-    if stat != null: return stat
+    if stat != null:
+        return stat
     for content in ProgressData.ncl_get_registered_contents():
         for content_stat in content.stats:
-            if content_stat.stat_hash == stat_hash: return content_stat
+            if content_stat.stat_hash == stat_hash:
+                return content_stat
 
     return null
 

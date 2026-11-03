@@ -1,6 +1,9 @@
 extends "res://singletons/utils.gd"
 
-enum GearType {ITEM, WEAPON}
+enum GearType {
+    ITEM,
+    WEAPON,
+}
 
 const HASH_PRIME: int = 31
 
@@ -39,8 +42,10 @@ func ncl_curse_effect_value(value: float, modifier: float, options: Dictionary =
         false:
             value = stepify(value * (1.0 + modifier), step)
 
-    if !is_nan(min_num): value = max(value, min_num)
-    if !is_nan(max_num): value = min(value, max_num)
+    if !is_nan(min_num):
+        value = max(value, min_num)
+    if !is_nan(max_num):
+        value = min(value, max_num)
 
     return value
 
@@ -50,9 +55,11 @@ func ncl_curse_item(
     turn_randomization_off: bool = false,
     min_modifier: float = 0.0
 ) -> ItemParentData:
-    if !ProgressData.is_dlc_available("abyssal_terrors"): return item_data
+    if !ProgressData.is_dlc_available("abyssal_terrors"):
+        return item_data
     var dlc_1: DLCData = ItemService.get_dlc_data_by_id("abyssal_terrors")
-    if dlc_1 == null: return item_data
+    if dlc_1 == null:
+        return item_data
     return dlc_1.curse_item(item_data, player_index, turn_randomization_off, min_modifier)
 
 func ncl_curse_enemy(enemy: Enemy) -> void:
@@ -60,7 +67,8 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
     var main: Main = get_scene_node()
     var effect_behaviors: Array = main._effect_behaviors.get_children()
     for effect_behavior in effect_behaviors:
-        if !(effect_behavior.has_method("_curse_enemy")): continue
+        if !(effect_behavior.has_method("_curse_enemy")):
+            continue
 
         effect_behavior._curse_enemy(enemy, curse)
         break
@@ -79,7 +87,11 @@ func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float
 
     return dmg
 
-func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, player_index: int) -> int:
+func ncl_get_dmg_with_scaling_stats(
+    base_damage: int,
+    p_scaling_stats: Array,
+    player_index: int
+) -> int:
     var scaling_stats_dmg: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
     var dmg: float = base_damage + scaling_stats_dmg
     var final_dmg: int = int(dmg * (1.0 + Utils.get_stat(Keys.stat_percent_damage_hash, player_index) / 100.0))
@@ -87,7 +99,11 @@ func ncl_get_dmg_with_scaling_stats(base_damage: int, p_scaling_stats: Array, pl
 
     return final_dmg
 
-func ncl_get_num_with_scaling_stats(base_num: int, p_scaling_stats: Array, player_index: int) -> int:
+func ncl_get_num_with_scaling_stats(
+    base_num: int,
+    p_scaling_stats: Array,
+    player_index: int
+) -> int:
     var scaling_stats_num: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
     var num: float = base_num + scaling_stats_num
     var final_num: int = int(max(1, num))
@@ -162,14 +178,30 @@ func ncl_get_num_text_with_scaling_stats(
 
     return text
 
-func ncl_get_range_with_detection(base_range: int, range_rate: float = 0.0, player_index: int = -1, detection: int = 200) -> float:
-    if range_rate == 0.0 or player_index == -1: return float(detection + base_range)
+func ncl_get_range_with_detection(
+    base_range: int,
+    range_rate: float = 0.0,
+    player_index: int = -1,
+    detection: int = 200
+) -> float:
+    if range_rate == 0.0 or player_index == -1:
+        return float(detection + base_range)
     return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
-func ncl_get_range_text_with_scaling(base_range: int, range_rate: float, player_index: int) -> String:
+func ncl_get_range_text_with_scaling(
+    base_range: int,
+    range_rate: float,
+    player_index: int
+) -> String:
     var total_range: int = int(Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate + base_range)
-    var range_scaling_text: String = Utils.get_scaling_stat_icon_text(Keys.stat_range_hash, range_rate)
-    return "[color=%s]%s[/color] (%s)" % [ncl_get_signed_col(total_range, base_range), total_range, range_scaling_text]
+    var range_scaling_text: String = Utils.get_scaling_stat_icon_text(
+        Keys.stat_range_hash,
+        range_rate
+    )
+    return "[color=%s]%s[/color] (%s)" % [ncl_get_signed_col(
+        total_range,
+        base_range
+    ), total_range, range_scaling_text]
 
 func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
     var colors = {
@@ -179,9 +211,12 @@ func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) 
     }
 
     var comparison = sign(value - base_value)
-    if comparison == 0: return colors["neutral"]
-    if !reverse: return colors["pos"] if comparison > 0 else colors["neg"]
-    else: return colors["neg"] if comparison > 0 else colors["pos"]
+    if comparison == 0:
+        return colors["neutral"]
+    if !reverse:
+        return colors["pos"] if comparison > 0 else colors["neg"]
+    else:
+        return colors["neg"] if comparison > 0 else colors["pos"]
 
 func ncl_queue_free_weapon(weapon: Node2D):
     weapon._current_cooldown = Utils.LARGE_NUMBER
@@ -190,7 +225,11 @@ func ncl_queue_free_weapon(weapon: Node2D):
     weapon.visible = false
     disable_node(weapon)
 
-func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, player_index: int) -> void:
+func ncl_change_weapon_within_run(
+    weapon_position: int,
+    new_weapon_id: int,
+    player_index: int
+) -> void:
     var player: Player = get_scene_node()._players[player_index]
     var current_weapons: Array = player.current_weapons
     var old_weapon: Weapon = current_weapons[weapon_position]
@@ -206,8 +245,14 @@ func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, play
     var new_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(new_weapon_id)
     if old_weapon.is_cursed:
         var new_cursed_weapon_min_factor: float = old_weapon.curse_factor
-        for effect in old_weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
-        new_weapon_data = ncl_curse_item(new_weapon_data, player_index, false, new_cursed_weapon_min_factor)
+        for effect in old_weapon.effects:
+            new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
+        new_weapon_data = ncl_curse_item(
+            new_weapon_data,
+            player_index,
+            false,
+            new_cursed_weapon_min_factor
+        )
 
     var new_weapon: WeaponData = RunData.add_weapon(new_weapon_data, player_index)
     new_weapon.tracked_value = removed_weapon_tracked_value
@@ -215,8 +260,15 @@ func ncl_change_weapon_within_run(weapon_position: int, new_weapon_id: int, play
     ncl_queue_free_weapon(old_weapon)
     player.call_deferred("add_weapon", new_weapon_data, current_weapons.size())
 
-func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, player_index: int, shop: BaseShop) -> void:
-    var weapons_container_elements: Inventory = shop._get_gear_container(player_index).weapons_container._elements
+func ncl_change_weapon_within_shop(
+    weapon: WeaponData,
+    new_weapon_id: int,
+    player_index: int,
+    shop: BaseShop
+) -> void:
+    var weapons_container_elements: Inventory = (
+        shop._get_gear_container(player_index).weapons_container._elements
+    )
     var removed_weapon_tracked_value: int = 0
 
     removed_weapon_tracked_value = RunData.remove_weapon(weapon, player_index)
@@ -225,8 +277,14 @@ func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, playe
     var new_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(new_weapon_id)
     if weapon.is_cursed:
         var new_cursed_weapon_min_factor: float = weapon.curse_factor
-        for effect in weapon.effects: new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
-        new_weapon_data = ncl_curse_item(new_weapon_data, player_index, false, new_cursed_weapon_min_factor)
+        for effect in weapon.effects:
+            new_cursed_weapon_min_factor = max(new_cursed_weapon_min_factor, effect.curse_factor)
+        new_weapon_data = ncl_curse_item(
+            new_weapon_data,
+            player_index,
+            false,
+            new_cursed_weapon_min_factor
+        )
 
     var new_weapon: WeaponData = RunData.add_weapon(new_weapon_data, player_index)
     new_weapon.tracked_value = removed_weapon_tracked_value
@@ -241,10 +299,15 @@ func ncl_change_weapon_within_shop(weapon: WeaponData, new_weapon_id: int, playe
 
     SoundManager.play(Utils.get_rand_element(shop.combine_sounds), 0, 0.1, true)
 
-func ncl_create_custom_damage_args(player_index: int, color: Color = Color.white, icon_hash: int = Keys.empty_hash) -> TakeDamageArgs:
+func ncl_create_custom_damage_args(
+    player_index: int,
+    color: Color = Color.white,
+    icon_hash: int = Keys.empty_hash
+) -> TakeDamageArgs:
     var args: TakeDamageArgs = TakeDamageArgs.new(player_index)
     args.set_meta("custom_color", color)
-    if icon_hash != Keys.empty_hash: args.set_meta("custom_icon", icon_hash)
+    if icon_hash != Keys.empty_hash:
+        args.set_meta("custom_icon", icon_hash)
 
     return args
 
@@ -252,21 +315,29 @@ func ncl_get_validate_node_name(name: String) -> String:
     var result: String = name
     var first_index = result.find("@")
     var second_index = result.find("@", 1)
-    if second_index == -1: result = result.substr(0, first_index)
-    else: result = result.substr(1, second_index - 1)
+    if second_index == -1:
+        result = result.substr(0, first_index)
+    else:
+        result = result.substr(1, second_index - 1)
 
     return result
 
 func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: int) -> void:
     var main: Main = get_scene_node()
     for _i in range(num):
-        var consumable_to_spawn: ConsumableData = ItemService.get_element(ItemService.consumables, consumable_id)
-        var consumable: Consumable = main.get_node_from_pool(main._consumable_pool_id, main._consumables_container)
+        var consumable_to_spawn: ConsumableData = ItemService.get_element(
+            ItemService.consumables,
+            consumable_id
+        )
+        var consumable: Consumable = main.get_node_from_pool(
+            main._consumable_pool_id,
+            main._consumables_container
+        )
         if consumable == null:
             consumable = main.consumable_scene.instance()
             main._consumables_container.call_deferred("add_child", consumable)
             var _error = consumable.connect("picked_up", main, "on_consumable_picked_up")
-            yield (consumable, "ready")
+            yield(consumable, "ready")
 
         consumable.already_picked_up = false
         consumable.consumable_data = consumable_to_spawn
@@ -277,14 +348,18 @@ func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: in
         main._consumables.push_back(consumable)
 
 func ncl_judge_item_type_from_my_id(my_id: int) -> int:
-    if ItemService.is_item_id(my_id): return GearType.ITEM
-    elif ItemService.ncl_is_weapon_id(my_id): return GearType.WEAPON
+    if ItemService.is_item_id(my_id):
+        return GearType.ITEM
+    elif ItemService.ncl_is_weapon_id(my_id):
+        return GearType.WEAPON
     return -1
 
 func ncl_get_nb_gear(gear_id: int, player_index: int) -> int:
     var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
-    if gear_type == GearType.ITEM: return RunData.get_nb_item(gear_id, player_index)
-    elif gear_type == GearType.WEAPON: return RunData.ncl_get_nb_weapon(gear_id, player_index)
+    if gear_type == GearType.ITEM:
+        return RunData.get_nb_item(gear_id, player_index)
+    elif gear_type == GearType.WEAPON:
+        return RunData.ncl_get_nb_weapon(gear_id, player_index)
     return 0
 
 func ncl_add_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
@@ -292,24 +367,32 @@ func ncl_add_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
     if gear_type == GearType.ITEM:
         var base_item_data: ItemData = ItemService.get_item_from_id(gear_id)
         for _i in range(num):
-            var item_data: ItemData = ItemService.apply_item_effect_modifications(base_item_data, player_index)
+            var item_data: ItemData = ItemService.apply_item_effect_modifications(
+                base_item_data,
+                player_index
+            )
             RunData.add_item(item_data, player_index)
 
     elif gear_type == GearType.WEAPON:
         var base_weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
         for _i in range(num):
-            var weapon_data: WeaponData = ItemService.apply_item_effect_modifications(base_weapon_data, player_index)
+            var weapon_data: WeaponData = ItemService.apply_item_effect_modifications(
+                base_weapon_data,
+                player_index
+            )
             RunData.add_weapon(weapon_data, player_index)
 
 func ncl_remove_gear_by_id(gear_id: int, player_index: int, num: int = 1) -> void:
     var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
     if gear_type == GearType.ITEM:
         var item_data: ItemData = ItemService.get_item_from_id(gear_id)
-        for _i in range(num): RunData.remove_item(item_data, player_index, true)
+        for _i in range(num):
+            RunData.remove_item(item_data, player_index, true)
 
     elif gear_type == GearType.WEAPON:
         var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
-        for _i in range(num): RunData.ncl_remove_weapon_by_id(weapon_data, player_index)
+        for _i in range(num):
+            RunData.ncl_remove_weapon_by_id(weapon_data, player_index)
 
 func ncl_get_gear_name_from_id(gear_id: int, num: int = 1) -> String:
     var gear_type: int = ncl_judge_item_type_from_my_id(gear_id)
@@ -317,13 +400,15 @@ func ncl_get_gear_name_from_id(gear_id: int, num: int = 1) -> String:
     if gear_type == GearType.ITEM:
         var item_data: ItemData = ItemService.get_item_from_id(gear_id)
         var tier_color: String = ItemService.get_color_from_tier(item_data.tier).to_html()
-        if num > 1: return "[color=#%s]%s x%d[/color] " % [tier_color, item_data.get_name_text(), num]
+        if num > 1:
+            return "[color=#%s]%s x%d[/color] " % [tier_color, item_data.get_name_text(), num]
         return "[color=#%s]%s[/color]" % [tier_color, item_data.get_name_text()]
 
     elif gear_type == GearType.WEAPON:
         var weapon_data: WeaponData = ItemService.ncl_get_weapon_from_id(gear_id)
         var tier_color: String = ItemService.get_color_from_tier(weapon_data.tier).to_html()
-        if num > 1: return "[color=#%s]%s x%d[/color] " % [tier_color, weapon_data.get_name_text(), num]
+        if num > 1:
+            return "[color=#%s]%s x%d[/color] " % [tier_color, weapon_data.get_name_text(), num]
         return "[color=#%s]%s[/color]" % [tier_color, weapon_data.get_name_text()]
 
     return ""
@@ -335,7 +420,8 @@ func ncl_get_true_stat_name(stat: String) -> String:
         "": stat_name = tr("EMPTY")
         "number_of_enemies": stat_name = tr("PCT_NUMBER_OF_ENEMIES")
         "different_item": stat_name = tr("ITEM")
-        _: stat_name = tr(stat.to_upper())
+        _:
+            stat_name = tr(stat.to_upper())
 
     return stat_name
 
