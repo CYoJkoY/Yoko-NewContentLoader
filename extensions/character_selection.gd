@@ -17,7 +17,7 @@ func _on_ZoneSelectionButton_item_selected(index: int) -> void:
     _zone_selection_button.select(index)
     if index != random_index:
         ProgressData.settings.zone_is_random = false
-        _setup_zone(index)
+        _setup_zone(_zone_selection_button.get_item_id(index))
         return
 
     var available_zones: Array = ProgressData.ncl_get_available_zones()
@@ -31,8 +31,3 @@ func _on_ZoneSelectionButton_item_selected(index: int) -> void:
     reload_info_panel()
     for panel in _get_panels():
         panel._update_bg()
-
-func _setup_zone(index: int) -> void:
-    if ProgressData.settings.zone_is_random:
-        index = _zone_selection_button.get_item_index(int(ProgressData.settings.zone_selected))
-    ._setup_zone(index)
