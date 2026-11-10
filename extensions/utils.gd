@@ -152,11 +152,12 @@ func ncl_get_float_num_with_scaling_stats(
     base_num: float,
     p_scaling_stats: Array,
     player_index: int,
-    min_num: float = 1.0
+    min_num: float = 1.0,
+    step: float = 0.01
 ) -> float:
     var scaling_stats_num: float = ncl_get_scaling_stats_num(p_scaling_stats, player_index)
     var num: float = base_num + scaling_stats_num
-    var final_num: float = max(min_num, num)
+    var final_num: float = stepify(max(min_num, num), step)
 
     return final_num
 
