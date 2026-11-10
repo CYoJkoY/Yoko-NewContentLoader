@@ -7,7 +7,20 @@ enum GearType {
 
 const HASH_PRIME: int = 31
 
-# ══════════════════════════════════════════ Method ══════════════════════════════════════════ #
+# ══════════════════════════════════════════ Stat ══════════════════════════════════════════ #
+
+func ncl_get_true_stat_name(stat: String) -> String:
+    var stat_name: String = stat.to_lower()
+
+    match stat_name:
+        "": stat_name = tr("EMPTY")
+        "number_of_enemies": stat_name = tr("PCT_NUMBER_OF_ENEMIES")
+        "different_item": stat_name = tr("ITEM")
+        _:
+            stat_name = tr(stat.to_upper())
+
+    return stat_name
+
 func ncl_quiet_add_stat(stat_hash: int, value: int, player_index: int) -> void:
     var effects: Dictionary = RunData.get_player_effects(player_index)
     effects[stat_hash] += value
@@ -19,6 +32,8 @@ func ncl_quiet_set_stat(stat_hash: int, value: int, player_index: int) -> void:
     effects[stat_hash] = value
     RunData._are_player_stats_dirty[player_index] = true
     Utils.reset_stat_cache(player_index)
+
+# ══════════════════════════════════════════ Curse ══════════════════════════════════════════ #
 
 # Options:
 # - modifier_scale: float = 1.0
@@ -73,6 +88,25 @@ func ncl_curse_enemy(enemy: Enemy) -> void:
         effect_behavior._curse_enemy(enemy, curse)
         break
 
+# ══════════════════════════════════════════ Signed Color ══════════════════════════════════════════ #
+
+func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
+    var colors = {
+        "pos": "#" + ProgressData.settings.color_positive,
+        "neg": "#" + ProgressData.settings.color_negative,
+        "neutral": "white"
+    }
+
+    var comparison = sign(value - base_value)
+    if comparison == 0:
+        return colors["neutral"]
+    if !reverse:
+        return colors["pos"] if comparison > 0 else colors["neg"]
+    else:
+        return colors["neg"] if comparison > 0 else colors["pos"]
+
+# ══════════════════════════════════════════ Tracking ══════════════════════════════════════════ #
+
 func ncl_create_tracking(key: String, value: float, show_inf: bool = false) -> String:
     var color: String = Utils.SECONDARY_FONT_COLOR_HTML
     var key_text: String = tr(key)
@@ -80,7 +114,9 @@ func ncl_create_tracking(key: String, value: float, show_inf: bool = false) -> S
         "∞" if value >= 999 else str(value)
     return "[color=%s]%s[/color]" % [color, key_text.format([str_value])]
 
-func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float:
+# ══════════════════════════════════════════ Scaling Stats ══════════════════════════════════════════ #
+
+func ncl_get_scaling_stats_num(scaling_stats: Array, player_index: int) -> float:
     var dmg: float = 0.0
     for stat in scaling_stats:
         dmg += stat[1] * Utils.get_stat(stat[0], player_index)
@@ -90,30 +126,53 @@ func ncl_get_scaling_stats_dmg(scaling_stats: Array, player_index: int) -> float
 func ncl_get_dmg_with_scaling_stats(
     base_damage: int,
     p_scaling_stats: Array,
-    player_index: int
+    player_index: int,
+    min_dmg: int = 1
 ) -> int:
-    var scaling_stats_dmg: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
+    var scaling_stats_dmg: float = ncl_get_scaling_stats_num(p_scaling_stats, player_index)
     var dmg: float = base_damage + scaling_stats_dmg
     var final_dmg: int = int(dmg * (1.0 + Utils.get_stat(Keys.stat_percent_damage_hash, player_index) / 100.0))
-    final_dmg = int(max(1, final_dmg))
+    final_dmg = int(max(min_dmg, final_dmg))
 
     return final_dmg
 
-func ncl_get_num_with_scaling_stats(
+func ncl_get_int_num_with_scaling_stats(
     base_num: int,
     p_scaling_stats: Array,
-    player_index: int
+    player_index: int,
+    min_num: int = 1
 ) -> int:
-    var scaling_stats_num: float = ncl_get_scaling_stats_dmg(p_scaling_stats, player_index)
+    var scaling_stats_num: float = ncl_get_scaling_stats_num(p_scaling_stats, player_index)
     var num: float = base_num + scaling_stats_num
-    var final_num: int = int(max(1, num))
+    var final_num: int = int(max(min_num, num))
 
     return final_num
+
+func ncl_get_float_num_with_scaling_stats(
+    base_num: float,
+    p_scaling_stats: Array,
+    player_index: int,
+    min_num: float = 1.0
+) -> float:
+    var scaling_stats_num: float = ncl_get_scaling_stats_num(p_scaling_stats, player_index)
+    var num: float = base_num + scaling_stats_num
+    var final_num: float = max(min_num, num)
+
+    return final_num
+
+func ncl_get_range_with_detection(
+    base_range: int,
+    range_rate: float = 0.0,
+    player_index: int = -1,
+    detection: int = 200
+) -> float:
+    if range_rate == 0.0 or player_index == -1:
+        return float(detection + base_range)
+    return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
 
 # Get dmg affected by % percent damage
 # Options:
 # - nb: int = 1
-# - effects: Array = []
 # - player_index: int = -1
 # - show_initial: bool = true
 func ncl_get_dmg_text_with_scaling_stats(
@@ -122,14 +181,9 @@ func ncl_get_dmg_text_with_scaling_stats(
     options: Dictionary = {}
 ) -> String:
     var nb: int = options.get("nb", 1)
-    var effects: Array = options.get("effects", [])
     var player_index: int = options.get("player_index", -1)
     var show_initial: bool = options.get("show_initial", true)
-    var damage: float = ncl_get_dmg_with_scaling_stats(base_damage, p_scaling_stats, player_index)
-
-    for effect in effects:
-        if effect is PlayerHealthStatEffect and effect.key == "stat_damage":
-            damage += effect.get_bonus_damage(player_index)
+    var damage: int = ncl_get_dmg_with_scaling_stats(base_damage, p_scaling_stats, player_index)
 
     var color: String = ncl_get_signed_col(damage, base_damage)
     var dmg_text: String = "[color=%s]%s[/color]" % [color, str(damage)]
@@ -144,26 +198,20 @@ func ncl_get_dmg_text_with_scaling_stats(
 
     return text
 
-# Get num not affected by % percent damage
+# Get int num not affected by % percent damage
 # Options:
 # - nb: int = 1
-# - effects: Array = []
 # - player_index: int = -1
 # - show_initial: bool = true
-func ncl_get_num_text_with_scaling_stats(
+func ncl_get_int_num_text_with_scaling_stats(
     base_num: int,
     p_scaling_stats: Array,
     options: Dictionary = {}
 ) -> String:
     var nb: int = options.get("nb", 1)
-    var effects: Array = options.get("effects", [])
     var player_index: int = options.get("player_index", -1)
     var show_initial: bool = options.get("show_initial", true)
-    var num: float = ncl_get_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
-
-    for effect in effects:
-        if effect is PlayerHealthStatEffect and effect.key == "stat_damage":
-            num += effect.get_bonus_damage(player_index)
+    var num: int = ncl_get_int_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
 
     var color: String = ncl_get_signed_col(num, base_num)
     var num_text: String = "[color=%s]%s[/color]" % [color, str(num)]
@@ -178,15 +226,33 @@ func ncl_get_num_text_with_scaling_stats(
 
     return text
 
-func ncl_get_range_with_detection(
-    base_range: int,
-    range_rate: float = 0.0,
-    player_index: int = -1,
-    detection: int = 200
-) -> float:
-    if range_rate == 0.0 or player_index == -1:
-        return float(detection + base_range)
-    return detection + base_range + Utils.get_stat(Keys.stat_range_hash, player_index) * range_rate
+# Get float num not affected by % percent damage
+# Options:
+# - nb: int = 1
+# - player_index: int = -1
+# - show_initial: bool = true
+func ncl_get_float_num_text_with_scaling_stats(
+    base_num: float,
+    p_scaling_stats: Array,
+    options: Dictionary = {}
+) -> String:
+    var nb: int = options.get("nb", 1)
+    var player_index: int = options.get("player_index", -1)
+    var show_initial: bool = options.get("show_initial", true)
+    var num: float = ncl_get_float_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
+
+    var color: String = ncl_get_signed_col(num, base_num)
+    var num_text: String = "[color=%s]%s[/color]" % [color, str(num)]
+
+    var text = num_text if nb == 1 else "%sx%s" % [num_text, str(nb)]
+
+    if num != base_num and show_initial:
+        var initial_num_text = str(base_num) if nb == 1 else str(base_num) + "x" + str(nb)
+        text += " [color=%s]|%s[/color]" % [Utils.GRAY_COLOR_STR, initial_num_text]
+
+    text += " (" + WeaponService.get_scaling_stats_icon_text(p_scaling_stats) + ")"
+
+    return text
 
 func ncl_get_range_text_with_scaling(
     base_range: int,
@@ -203,20 +269,7 @@ func ncl_get_range_text_with_scaling(
         base_range
     ), total_range, range_scaling_text]
 
-func ncl_get_signed_col(value: float, base_value: float, reverse: bool = false) -> String:
-    var colors = {
-        "pos": "#" + ProgressData.settings.color_positive,
-        "neg": "#" + ProgressData.settings.color_negative,
-        "neutral": "white"
-    }
-
-    var comparison = sign(value - base_value)
-    if comparison == 0:
-        return colors["neutral"]
-    if !reverse:
-        return colors["pos"] if comparison > 0 else colors["neg"]
-    else:
-        return colors["neg"] if comparison > 0 else colors["pos"]
+# ══════════════════════════════════════════ Weapon ══════════════════════════════════════════ #
 
 func ncl_queue_free_weapon(weapon: Node2D):
     weapon._current_cooldown = Utils.LARGE_NUMBER
@@ -299,53 +352,7 @@ func ncl_change_weapon_within_shop(
 
     SoundManager.play(Utils.get_rand_element(shop.combine_sounds), 0, 0.1, true)
 
-func ncl_create_custom_damage_args(
-    player_index: int,
-    color: Color = Color.white,
-    icon_hash: int = Keys.empty_hash
-) -> TakeDamageArgs:
-    var args: TakeDamageArgs = TakeDamageArgs.new(player_index)
-    args.set_meta("custom_color", color)
-    if icon_hash != Keys.empty_hash:
-        args.set_meta("custom_icon", icon_hash)
-
-    return args
-
-func ncl_get_validate_node_name(name: String) -> String:
-    var result: String = name
-    var first_index = result.find("@")
-    var second_index = result.find("@", 1)
-    if second_index == -1:
-        result = result.substr(0, first_index)
-    else:
-        result = result.substr(1, second_index - 1)
-
-    return result
-
-func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: int) -> void:
-    var main: Main = get_scene_node()
-    for _i in range(num):
-        var consumable_to_spawn: ConsumableData = ItemService.get_element(
-            ItemService.consumables,
-            consumable_id
-        )
-        var consumable: Consumable = main.get_node_from_pool(
-            main._consumable_pool_id,
-            main._consumables_container
-        )
-        if consumable == null:
-            consumable = main.consumable_scene.instance()
-            main._consumables_container.call_deferred("add_child", consumable)
-            var _error = consumable.connect("picked_up", main, "on_consumable_picked_up")
-            yield(consumable, "ready")
-
-        consumable.already_picked_up = false
-        consumable.consumable_data = consumable_to_spawn
-        consumable.set_texture(consumable_to_spawn.icon)
-        var dist = rand_range(50, 100 + spread)
-        var push_back_destination = ZoneService.get_rand_pos_in_area(pos, dist, 0)
-        consumable.drop(pos, 0, push_back_destination)
-        main._consumables.push_back(consumable)
+# ══════════════════════════════════════════ Gear ══════════════════════════════════════════ #
 
 func ncl_judge_item_type_from_my_id(my_id: int) -> int:
     if ItemService.is_item_id(my_id):
@@ -413,17 +420,61 @@ func ncl_get_gear_name_from_id(gear_id: int, num: int = 1) -> String:
 
     return ""
 
-func ncl_get_true_stat_name(stat: String) -> String:
-    var stat_name: String = stat.to_lower()
+# ══════════════════════════════════════════ Node Name ══════════════════════════════════════════ #
 
-    match stat_name:
-        "": stat_name = tr("EMPTY")
-        "number_of_enemies": stat_name = tr("PCT_NUMBER_OF_ENEMIES")
-        "different_item": stat_name = tr("ITEM")
-        _:
-            stat_name = tr(stat.to_upper())
+func ncl_get_validate_node_name(name: String) -> String:
+    var result: String = name
+    var first_index = result.find("@")
+    var second_index = result.find("@", 1)
+    if second_index == -1:
+        result = result.substr(0, first_index)
+    else:
+        result = result.substr(1, second_index - 1)
 
-    return stat_name
+    return result
+
+# ══════════════════════════════════════════ Damage Args ══════════════════════════════════════════ #
+
+func ncl_create_custom_damage_args(
+    player_index: int,
+    color: Color = Color.white,
+    icon_hash: int = Keys.empty_hash
+) -> TakeDamageArgs:
+    var args: TakeDamageArgs = TakeDamageArgs.new(player_index)
+    args.set_meta("custom_color", color)
+    if icon_hash != Keys.empty_hash:
+        args.set_meta("custom_icon", icon_hash)
+
+    return args
+
+# ══════════════════════════════════════════ Consumable ══════════════════════════════════════════ #
+
+func ncl_spawn_consumable(consumable_id: int, num: int, pos: Vector2, spread: int) -> void:
+    var main: Main = get_scene_node()
+    for _i in range(num):
+        var consumable_to_spawn: ConsumableData = ItemService.get_element(
+            ItemService.consumables,
+            consumable_id
+        )
+        var consumable: Consumable = main.get_node_from_pool(
+            main._consumable_pool_id,
+            main._consumables_container
+        )
+        if consumable == null:
+            consumable = main.consumable_scene.instance()
+            main._consumables_container.call_deferred("add_child", consumable)
+            var _error = consumable.connect("picked_up", main, "on_consumable_picked_up")
+            yield(consumable, "ready")
+
+        consumable.already_picked_up = false
+        consumable.consumable_data = consumable_to_spawn
+        consumable.set_texture(consumable_to_spawn.icon)
+        var dist = rand_range(50, 100 + spread)
+        var push_back_destination = ZoneService.get_rand_pos_in_area(pos, dist, 0)
+        consumable.drop(pos, 0, push_back_destination)
+        main._consumables.push_back(consumable)
+
+# ══════════════════════════════════════════ Hash ══════════════════════════════════════════ #
 
 func ncl_generate_composite_hash(values: Array) -> int:
     var result: int = 1
