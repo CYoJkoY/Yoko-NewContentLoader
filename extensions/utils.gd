@@ -153,7 +153,7 @@ func ncl_get_float_num_with_scaling_stats(
     p_scaling_stats: Array,
     player_index: int,
     min_num: float = 1.0,
-    step: float = 0.01
+    step: float = 0.1
 ) -> float:
     var scaling_stats_num: float = ncl_get_scaling_stats_num(p_scaling_stats, player_index)
     var num: float = base_num + scaling_stats_num
@@ -204,6 +204,7 @@ func ncl_get_dmg_text_with_scaling_stats(
 # - nb: int = 1
 # - player_index: int = -1
 # - show_initial: bool = true
+# - min_num = 1
 func ncl_get_int_num_text_with_scaling_stats(
     base_num: int,
     p_scaling_stats: Array,
@@ -212,7 +213,13 @@ func ncl_get_int_num_text_with_scaling_stats(
     var nb: int = options.get("nb", 1)
     var player_index: int = options.get("player_index", -1)
     var show_initial: bool = options.get("show_initial", true)
-    var num: int = ncl_get_int_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
+    var min_num: int = options.get("min_num", 1)
+    var num: int = ncl_get_int_num_with_scaling_stats(
+        base_num,
+        p_scaling_stats,
+        player_index,
+        min_num
+    )
 
     var color: String = ncl_get_signed_col(num, base_num)
     var num_text: String = "[color=%s]%s[/color]" % [color, str(num)]
@@ -232,6 +239,8 @@ func ncl_get_int_num_text_with_scaling_stats(
 # - nb: int = 1
 # - player_index: int = -1
 # - show_initial: bool = true
+# - min_num = 1.0
+# - step = 0.1
 func ncl_get_float_num_text_with_scaling_stats(
     base_num: float,
     p_scaling_stats: Array,
@@ -240,7 +249,15 @@ func ncl_get_float_num_text_with_scaling_stats(
     var nb: int = options.get("nb", 1)
     var player_index: int = options.get("player_index", -1)
     var show_initial: bool = options.get("show_initial", true)
-    var num: float = ncl_get_float_num_with_scaling_stats(base_num, p_scaling_stats, player_index)
+    var min_num: float = options.get("min_num", 1.0)
+    var step: float = options.get("step", 0.1)
+    var num: float = ncl_get_float_num_with_scaling_stats(
+        base_num,
+        p_scaling_stats,
+        player_index,
+        min_num,
+        step
+    )
 
     var color: String = ncl_get_signed_col(num, base_num)
     var num_text: String = "[color=%s]%s[/color]" % [color, str(num)]
